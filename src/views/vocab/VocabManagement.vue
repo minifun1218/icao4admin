@@ -289,18 +289,83 @@
           </el-col>
         </el-row>
         
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="音频路径" prop="audioPath">
-              <el-input v-model="editForm.audioPath" placeholder="请输入音频文件路径" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="图片路径" prop="imagePath">
-              <el-input v-model="editForm.imagePath" placeholder="请输入图片路径" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <!-- 音频上传 -->
+        <el-form-item label="音频上传">
+          <div class="audio-upload-section">
+            <el-upload
+              ref="audioUploadRef"
+              :file-list="audioFileList"
+              :before-upload="beforeAudioUpload"
+              :on-success="handleAudioSuccess"
+              :on-remove="handleAudioRemove"
+              :on-error="handleAudioError"
+              accept="audio/*"
+              :limit="1"
+              action="/api/vocab/upload/audio"
+              class="audio-upload"
+            >
+              <el-button type="primary">
+                <el-icon><Upload /></el-icon>
+                上传音频
+              </el-button>
+              <template #tip>
+                <div class="upload-tip">
+                  支持 MP3、WAV、OGG、M4A 格式，文件大小不超过 10MB
+                </div>
+              </template>
+            </el-upload>
+            
+            <!-- 音频预览 -->
+            <div v-if="editForm.audioUrl" class="audio-preview">
+              <div class="audio-info">
+                <el-icon color="#409EFF"><Service /></el-icon>
+                <span>{{ getAudioFileName(editForm.audioUrl) }}</span>
+                <el-button 
+                  type="text" 
+                  size="small" 
+                  @click="playPreviewAudio"
+                  :loading="audioPlaying"
+                >
+                  <el-icon><VideoPlay /></el-icon>
+                  {{ audioPlaying ? '播放中...' : '试听' }}
+                </el-button>
+                <el-button 
+                  type="text" 
+                  size="small" 
+                  @click="removeAudio"
+                  class="remove-audio"
+                >
+                  <el-icon><Delete /></el-icon>
+                  移除
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </el-form-item>
+
+        <!-- 图片上传 -->
+        <el-form-item label="图片上传">
+          <div class="image-upload-section">
+            <el-upload
+              ref="imageUploadRef"
+              :file-list="imageFileList"
+              :before-upload="beforeImageUpload"
+              :on-success="handleImageSuccess"
+              :on-remove="handleImageRemove"
+              :on-error="handleImageError"
+              accept="image/*"
+              :limit="1"
+              action="/api/vocab/upload/image"
+              list-type="picture-card"
+              class="image-upload"
+            >
+              <el-icon class="avatar-uploader-icon"><Plus /></el-icon>
+            </el-upload>
+            <div class="upload-tip">
+              支持 JPG、PNG、GIF、WebP 格式，文件大小不超过 5MB
+            </div>
+          </div>
+        </el-form-item>
         
         <el-form-item label="标签" prop="tags">
           <el-input v-model="editForm.tags" placeholder="多个标签用逗号分隔" />
@@ -351,7 +416,8 @@ import {
   Plus,
   Delete,
   Edit,
-  VideoPlay
+  VideoPlay,
+  Service
 } from '@element-plus/icons-vue'
 
 // 响应式数据
@@ -359,12 +425,17 @@ const loading = ref(false)
 const importing = ref(false)
 const exporting = ref(false)
 const saving = ref(false)
+const audioPlaying = ref(false)
 const editDialogVisible = ref(false)
 const editFormRef = ref(null)
 const uploadRef = ref(null)
+const audioUploadRef = ref(null)
+const imageUploadRef = ref(null)
 
 const vocabList = ref([])
 const selectedVocabs = ref([])
+const audioFileList = ref([])
+const imageFileList = ref([])
 
 // 选项数据
 const cefrLevels = vocabApi.getCEFRLevels()
@@ -397,8 +468,8 @@ const editForm = reactive({
   definitionCn: '',
   exampleSentence: '',
   exampleTranslation: '',
-  audioPath: '',
-  imagePath: '',
+  audioUrl: '',
+  imageUrl: '',
   difficultyLevel: 3,
   cefrLevel: '',
   frequencyLevel: 4,
@@ -506,8 +577,8 @@ const createVocab = () => {
     definitionCn: '',
     exampleSentence: '',
     exampleTranslation: '',
-    audioPath: '',
-    imagePath: '',
+    audioUrl: '',
+    imageUrl: '',
     difficultyLevel: 3,
     cefrLevel: '',
     frequencyLevel: 4,
@@ -516,6 +587,11 @@ const createVocab = () => {
     isEnabled: true,
     displayOrder: 1
   })
+  
+  // 清空文件列表
+  audioFileList.value = []
+  imageFileList.value = []
+  
   editDialogVisible.value = true
 }
 
@@ -531,8 +607,8 @@ const editVocab = (vocab) => {
     definitionCn: vocab.definitionZh,
     exampleSentence: vocab.exampleEn,
     exampleTranslation: vocab.exampleZh,
-    audioPath: vocab.audioAsset?.fileName || '',
-    imagePath: vocab.imagePath || '',
+    audioUrl: vocab.audioAsset?.url || '',
+    imageUrl: vocab.imageUrl || '',
     difficultyLevel: vocab.difficultyLevel || 3,
     cefrLevel: vocab.cefrLevel,
     frequencyLevel: vocab.freqRank || 4,
@@ -541,6 +617,18 @@ const editVocab = (vocab) => {
     isEnabled: vocab.isEnabled,
     displayOrder: vocab.displayOrder || 1
   })
+  
+  // 设置文件列表
+  audioFileList.value = vocab.audioAsset?.url ? [{
+    name: vocab.audioAsset.fileName || 'audio.mp3',
+    url: vocab.audioAsset.url
+  }] : []
+  
+  imageFileList.value = vocab.imageUrl ? [{
+    name: 'image.jpg',
+    url: vocab.imageUrl
+  }] : []
+  
   editDialogVisible.value = true
 }
 
@@ -684,6 +772,105 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('zh-CN')
 }
 
+// ==================== 音频上传处理 ====================
+
+// 音频上传前验证
+const beforeAudioUpload = (file) => {
+  const validation = vocabApi.validateAudioFile(file)
+  if (!validation.valid) {
+    ElMessage.error(validation.message)
+    return false
+  }
+  return true
+}
+
+// 音频上传成功
+const handleAudioSuccess = (response, file) => {
+  editForm.audioUrl = response.url
+  ElMessage.success('音频上传成功')
+}
+
+// 音频上传失败
+const handleAudioError = (error) => {
+  ElMessage.error('音频上传失败')
+}
+
+// 移除音频
+const handleAudioRemove = () => {
+  editForm.audioUrl = ''
+}
+
+// 移除音频（手动）
+const removeAudio = async () => {
+  try {
+    if (editForm.audioUrl) {
+      await vocabApi.deleteVocabAudio(editForm.audioUrl)
+    }
+    editForm.audioUrl = ''
+    audioFileList.value = []
+    ElMessage.success('音频移除成功')
+  } catch (error) {
+    ElMessage.error('音频移除失败')
+  }
+}
+
+// 播放预览音频
+const playPreviewAudio = () => {
+  if (!editForm.audioUrl) return
+  
+  audioPlaying.value = true
+  const audio = new Audio(editForm.audioUrl)
+  
+  audio.onended = () => {
+    audioPlaying.value = false
+  }
+  
+  audio.onerror = () => {
+    audioPlaying.value = false
+    ElMessage.error('音频播放失败')
+  }
+  
+  audio.play().catch(() => {
+    audioPlaying.value = false
+    ElMessage.error('音频播放失败')
+  })
+}
+
+// 获取音频文件名
+const getAudioFileName = (url) => {
+  if (!url) return ''
+  const parts = url.split('/')
+  return parts[parts.length - 1] || 'audio.mp3'
+}
+
+// ==================== 图片上传处理 ====================
+
+// 图片上传前验证
+const beforeImageUpload = (file) => {
+  const validation = vocabApi.validateImageFile(file)
+  if (!validation.valid) {
+    ElMessage.error(validation.message)
+    return false
+  }
+  return true
+}
+
+// 图片上传成功
+const handleImageSuccess = (response, file) => {
+  editForm.imageUrl = response.url
+  ElMessage.success('图片上传成功')
+}
+
+// 图片上传失败
+const handleImageError = (error) => {
+  ElMessage.error('图片上传失败')
+}
+
+// 移除图片
+const handleImageRemove = () => {
+  editForm.imageUrl = ''
+}
+
 onMounted(() => {
   loadVocabs()
 })
@@ -720,6 +907,75 @@ onMounted(() => {
 
 .text-gray {
   color: #909399;
+}
+
+/* 音频上传样式 */
+.audio-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.audio-upload {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.upload-tip {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.audio-preview {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px dashed #dcdfe6;
+}
+
+.audio-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.audio-info span {
+  flex: 1;
+  font-weight: 500;
+}
+
+.remove-audio {
+  color: #f56c6c !important;
+}
+
+.remove-audio:hover {
+  color: #f78989 !important;
+}
+
+/* 图片上传样式 */
+.image-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.image-upload {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.avatar-uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+  width: 148px;
+  height: 148px;
+  text-align: center;
+  line-height: 148px;
 }
 
 /* 响应式设计 */

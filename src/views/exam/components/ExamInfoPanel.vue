@@ -39,7 +39,7 @@
             />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSearch" :loading="loading">
+            <el-button type="primary" @click="handleSearch" :loading="currentLoading">
               <el-icon><Search /></el-icon>
               搜索
             </el-button>
@@ -52,7 +52,7 @@
       </div>
       
       <div class="action-section">
-        <el-button type="success" @click="$emit('add')">
+        <el-button type="success" @click="handleAdd">
           <el-icon><Plus /></el-icon>
           创建考试
         </el-button>
@@ -61,7 +61,7 @@
 
     <!-- 考试列表 -->
     <el-table
-      v-loading="loading"
+      v-loading="currentLoading"
       :data="filteredExams"
       stripe
       class="exam-table"
@@ -138,7 +138,7 @@
             <el-button 
               type="primary" 
               size="small" 
-              @click="$emit('edit', row)"
+              @click="handleEdit(row)"
               :disabled="row.status === 'ongoing'"
             >
               <el-icon><Edit /></el-icon>
@@ -149,7 +149,7 @@
               v-if="row.status === 'draft' || row.status === 'published'"
               type="success" 
               size="small" 
-              @click="$emit('start', row)"
+              @click="handleStart(row)"
             >
               <el-icon><VideoPlay /></el-icon>
               开始
@@ -159,7 +159,7 @@
               v-if="row.status === 'ongoing'"
               type="warning" 
               size="small" 
-              @click="$emit('end', row)"
+              @click="handleEnd(row)"
             >
               <el-icon><VideoPause /></el-icon>
               结束
@@ -168,7 +168,7 @@
             <el-button 
               type="info" 
               size="small" 
-              @click="$emit('view-participants', row)"
+              @click="handleViewParticipants(row)"
             >
               <el-icon><User /></el-icon>
               参与者
@@ -177,7 +177,7 @@
             <el-button 
               type="danger" 
               size="small" 
-              @click="$emit('delete', row)"
+              @click="handleDelete(row)"
               :disabled="row.status === 'ongoing'"
             >
               <el-icon><Delete /></el-icon>
@@ -204,8 +204,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
-import { examApi } from '@/api/exam'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useExamInfo } from '@/utils/exam-info'
 import {
   Search,
   Refresh,
@@ -227,11 +227,22 @@ const props = defineProps({
   loading: {
     type: Boolean,
     default: false
+  },
+  // 是否使用内置的考试信息管理
+  useBuiltinManager: {
+    type: Boolean,
+    default: true
   }
 })
 
 // Emits
 const emit = defineEmits(['add', 'edit', 'delete', 'start', 'end', 'view-participants'])
+
+// 考试信息管理
+const examInfo = useExamInfo({
+  autoRefresh: false,
+  enableCache: true
+})
 
 // 搜索表单
 const searchForm = reactive({
@@ -240,24 +251,43 @@ const searchForm = reactive({
   dateRange: []
 })
 
-// 分页数据
-const pagination = reactive({
-  page: 1,
-  size: 20,
-  total: 0
-})
+// 分页数据 - 如果使用内置管理器则使用管理器的分页，否则使用本地分页
+const pagination = props.useBuiltinManager 
+  ? examInfo.pagination
+  : reactive({
+      page: 1,
+      size: 20,
+      total: 0
+    })
 
 // 计算属性
-const examStatuses = computed(() => examApi.getExamStatusOptions())
+const examStatuses = computed(() => examInfo.examStatusOptions)
+
+// 获取考试数据 - 支持两种模式：使用内置管理器或使用传入的props
+const currentExams = computed(() => {
+  return props.useBuiltinManager ? examInfo.examList.value : props.exams
+})
+
+// 当前加载状态
+const currentLoading = computed(() => {
+  return props.useBuiltinManager ? examInfo.loading.value : props.loading
+})
 
 const filteredExams = computed(() => {
-  let filtered = props.exams
+  if (props.useBuiltinManager) {
+    // 使用内置管理器的过滤结果
+    return examInfo.filteredExams.value
+  }
+
+  // 本地过滤逻辑（保持向后兼容）
+  let filtered = currentExams.value
 
   // 关键词搜索
   if (searchForm.keyword) {
     const keyword = searchForm.keyword.toLowerCase()
     filtered = filtered.filter(exam => 
-      exam.name.toLowerCase().includes(keyword) ||
+      exam.name?.toLowerCase().includes(keyword) ||
+      exam.title?.toLowerCase().includes(keyword) ||
       (exam.description && exam.description.toLowerCase().includes(keyword))
     )
   }
@@ -272,48 +302,38 @@ const filteredExams = computed(() => {
     const startDate = new Date(searchForm.dateRange[0])
     const endDate = new Date(searchForm.dateRange[1])
     filtered = filtered.filter(exam => {
-      const examDate = new Date(exam.startTime)
+      const examDate = new Date(exam.startTime || exam.createdAt)
       return examDate >= startDate && examDate <= endDate
     })
   }
 
   // 更新分页总数
-  pagination.total = filtered.length
+  if (!props.useBuiltinManager) {
+    pagination.total = filtered.length
+    // 分页
+    const start = (pagination.page - 1) * pagination.size
+    const end = start + pagination.size
+    return filtered.slice(start, end)
+  }
 
-  // 分页
-  const start = (pagination.page - 1) * pagination.size
-  const end = start + pagination.size
-  return filtered.slice(start, end)
+  return filtered
 })
 
 // 方法
 const getStatusTagType = (status) => {
-  const tagTypes = {
-    draft: 'info',
-    published: 'success',
-    ongoing: 'warning',
-    ended: 'primary',
-    cancelled: 'danger'
-  }
-  return tagTypes[status] || 'info'
+  return examInfo.getStatusTagType(status)
 }
 
 const getExamTypeTagType = (type) => {
-  const tagTypes = {
-    practice: 'success',
-    mock: 'warning',
-    formal: 'danger',
-    placement: 'primary'
-  }
-  return tagTypes[type] || 'info'
+  return examInfo.getTypeTagType(type)
 }
 
 const formatExamStatus = (status) => {
-  return examApi.formatExamStatus(status)
+  return examInfo.formatExamStatus(status)
 }
 
 const formatExamType = (type) => {
-  return examApi.formatPaperType(type)
+  return examInfo.formatExamType(type)
 }
 
 const formatDate = (date) => {
@@ -332,27 +352,125 @@ const calculateCompletionRate = (exam) => {
   return Math.round((completedCount / exam.participantCount) * 100)
 }
 
-const handleSearch = () => {
-  pagination.page = 1
+const handleSearch = async () => {
+  if (props.useBuiltinManager) {
+    // 使用内置管理器的搜索
+    await examInfo.setSearchParams({
+      keyword: searchForm.keyword,
+      status: searchForm.status,
+      dateRange: searchForm.dateRange
+    })
+    await examInfo.loadExamData(true)
+  } else {
+    // 传统模式：只重置分页
+    pagination.page = 1
+  }
 }
 
-const resetSearch = () => {
+const resetSearch = async () => {
   Object.assign(searchForm, {
     keyword: '',
     status: '',
     dateRange: []
   })
-  pagination.page = 1
+  
+  if (props.useBuiltinManager) {
+    // 使用内置管理器的重置
+    await examInfo.resetSearchParams()
+    await examInfo.loadExamData(true)
+  } else {
+    // 传统模式：只重置分页
+    pagination.page = 1
+  }
 }
 
 const handleSizeChange = (size) => {
-  pagination.size = size
-  pagination.page = 1
+  if (props.useBuiltinManager) {
+    examInfo.changePageSize(size)
+  } else {
+    pagination.size = size
+    pagination.page = 1
+  }
 }
 
 const handleCurrentChange = (page) => {
-  pagination.page = page
+  if (props.useBuiltinManager) {
+    examInfo.goToPage(page)
+  } else {
+    pagination.page = page
+  }
 }
+
+// 考试操作方法 - 增强版本，支持内置管理器
+const handleAdd = () => {
+  emit('add')
+}
+
+const handleEdit = (exam) => {
+  if (props.useBuiltinManager) {
+    examInfo.setCurrentExam(exam)
+  }
+  emit('edit', exam)
+}
+
+const handleDelete = async (exam) => {
+  if (props.useBuiltinManager) {
+    // 使用内置管理器的删除方法
+    const success = await examInfo.deleteExam(exam.id, exam.name || exam.title)
+    if (success) {
+      // 删除成功后不需要额外操作，管理器已处理
+      return
+    }
+  }
+  // 传统模式或删除失败时触发事件
+  emit('delete', exam)
+}
+
+const handleStart = async (exam) => {
+  if (props.useBuiltinManager) {
+    // 使用内置管理器的开始方法
+    const success = await examInfo.startExam(exam.id)
+    if (success) {
+      return
+    }
+  }
+  // 传统模式或操作失败时触发事件
+  emit('start', exam)
+}
+
+const handleEnd = async (exam) => {
+  if (props.useBuiltinManager) {
+    // 使用内置管理器的结束方法
+    const success = await examInfo.endExam(exam.id, exam.name || exam.title)
+    if (success) {
+      return
+    }
+  }
+  // 传统模式或操作失败时触发事件
+  emit('end', exam)
+}
+
+const handleViewParticipants = (exam) => {
+  if (props.useBuiltinManager) {
+    examInfo.setCurrentExam(exam)
+  }
+  emit('view-participants', exam)
+}
+
+// 生命周期钩子
+onMounted(async () => {
+  if (props.useBuiltinManager) {
+    // 初始化时加载考试数据
+    await examInfo.loadExamData()
+  }
+})
+
+onUnmounted(() => {
+  if (props.useBuiltinManager) {
+    // 清理资源
+    examInfo.manager.stopAutoRefresh()
+  }
+})
 </script>
 
 <style scoped>
@@ -405,6 +523,7 @@ const handleCurrentChange = (page) => {
   margin-bottom: 8px;
   display: -webkit-box;
   -webkit-line-clamp: 1;
+  line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

@@ -91,7 +91,7 @@
                     {{ row.scenario.name }}
                   </el-tag>
                   <el-tag v-if="row.audioUrl" size="small" type="info">
-                    <el-icon><Headset /></el-icon>
+                    <el-icon><Service /></el-icon>
                     音频
                   </el-tag>
                 </div>
@@ -430,7 +430,7 @@ import {
   Edit,
   Delete,
   View,
-  Headset,
+  Service,
   Top,
   Bottom,
   MapLocation,

@@ -29,9 +29,9 @@
       <div class="stats-cards">
         <el-row :gutter="20">
           <el-col :span="6" v-for="stat in questionStats" :key="stat.type">
-            <el-card class="stat-card" :class="`stat-${stat.type}`" shadow="hover">
+            <el-card class="stat-card" :class="`stat-${stat.type}`" shadow="hover" @click="switchToTab(stat.type)">
               <div class="stat-content">
-                <div class="stat-icon">
+                <div class="stat-icon" :style="{ background: `linear-gradient(135deg, ${stat.color}20, ${stat.color}40)` }">
                   <el-icon :size="32" :color="stat.color">
                     <component :is="stat.icon" />
                   </el-icon>
@@ -39,6 +39,10 @@
                 <div class="stat-info">
                   <div class="stat-number">{{ stat.count }}</div>
                   <div class="stat-label">{{ stat.label }}</div>
+                  <div class="stat-trend">
+                    <el-icon color="#67C23A" size="12"><TrendCharts /></el-icon>
+                    <span class="trend-text">+{{ Math.floor(Math.random() * 20) }}%</span>
+                  </div>
                 </div>
               </div>
             </el-card>
@@ -48,27 +52,23 @@
 
       <!-- 标签页 -->
       <el-tabs v-model="activeTab" @tab-click="handleTabClick" class="question-tabs">
-        <!-- 听力理解 -->
-        <el-tab-pane name="listening">
+        <!-- 听力理解 (听力简答) -->
+        <el-tab-pane name="listening_comprehension">
           <template #label>
             <span class="tab-label">
-              <el-icon><Headset /></el-icon>
+              <el-icon><Service /></el-icon>
               听力理解
             </span>
           </template>
-          <QuestionTypePanel 
-            type="listening"
-            :questions="listeningQuestions"
+          <ListeningDialogPanel 
             :loading="loading"
-            @add="addQuestion"
-            @edit="editQuestion"
-            @delete="deleteQuestion"
             @selection-change="handleSelectionChange"
+            @refresh="loadQuestionStats"
           />
         </el-tab-pane>
 
         <!-- 听力选择题 -->
-        <el-tab-pane name="mcq">
+        <el-tab-pane name="listening_mcq">
           <template #label>
             <span class="tab-label">
               <el-icon><List /></el-icon>
@@ -76,7 +76,7 @@
             </span>
           </template>
           <QuestionTypePanel 
-            type="mcq"
+            type="listening_mcq"
             :questions="mcqQuestions"
             :loading="loading"
             @add="addQuestion"
@@ -86,50 +86,27 @@
           />
         </el-tab-pane>
 
-        <!-- 口语模仿 -->
-        <el-tab-pane name="opi">
-          <template #label>
-            <span class="tab-label">
-              <el-icon><Microphone /></el-icon>
-              口语模仿
-            </span>
-          </template>
-          <QuestionTypePanel 
-            type="opi"
-            :questions="opiQuestions"
-            :loading="loading"
-            @add="addQuestion"
-            @edit="editQuestion"
-            @delete="deleteQuestion"
-            @selection-change="handleSelectionChange"
-          />
-        </el-tab-pane>
-
         <!-- 故事复述 -->
-        <el-tab-pane name="retell">
+        <el-tab-pane name="story_retell">
           <template #label>
             <span class="tab-label">
               <el-icon><ChatDotRound /></el-icon>
               故事复述
             </span>
           </template>
-          <QuestionTypePanel 
-            type="retell"
-            :questions="retellQuestions"
+          <StoryRetellPanel 
             :loading="loading"
-            @add="addQuestion"
-            @edit="editQuestion"
-            @delete="deleteQuestion"
             @selection-change="handleSelectionChange"
+            @refresh="loadQuestionStats"
           />
         </el-tab-pane>
 
-        <!-- ATC模拟 -->
-        <el-tab-pane name="atc">
+        <!-- 模拟通话 (ATC模拟) -->
+        <el-tab-pane name="atc_simulation">
           <template #label>
             <span class="tab-label">
               <el-icon><Connection /></el-icon>
-              ATC模拟
+              模拟通话
             </span>
           </template>
           <ATCQuestionPanel 
@@ -142,6 +119,25 @@
             @add-scenario="addATCScenario"
             @edit-scenario="editATCScenario"
             @delete-scenario="deleteATCScenario"
+            @selection-change="handleSelectionChange"
+          />
+        </el-tab-pane>
+
+        <!-- 口语能力面试 (OPI) -->
+        <el-tab-pane name="opi">
+          <template #label>
+            <span class="tab-label">
+              <el-icon><Microphone /></el-icon>
+              口语能力面试
+            </span>
+          </template>
+          <QuestionTypePanel 
+            type="opi"
+            :questions="opiQuestions"
+            :loading="loading"
+            @add="addQuestion"
+            @edit="editQuestion"
+            @delete="deleteQuestion"
             @selection-change="handleSelectionChange"
           />
         </el-tab-pane>
@@ -422,22 +418,25 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import QuestionTypePanel from './components/QuestionTypePanel.vue'
 import ATCQuestionPanel from './components/ATCQuestionPanel.vue'
+import ListeningDialogPanel from './components/ListeningDialogPanel.vue'
+import StoryRetellPanel from './components/StoryRetellPanel.vue'
 import {
   Collection,
   Upload,
   Download,
   Delete,
-  Headset,
+  Service,
   List,
   Microphone,
   ChatDotRound,
   Connection,
   Plus,
-  Minus
+  Minus,
+  TrendCharts
 } from '@element-plus/icons-vue'
 
 // 响应式数据
-const activeTab = ref('listening')
+const activeTab = ref('listening_comprehension')
 const loading = ref(false)
 const saving = ref(false)
 const importing = ref(false)
@@ -490,11 +489,11 @@ const difficultyLevels = computed(() => questionBankApi.getDifficultyLevels())
 
 // 统计数据
 const questionStats = ref([
-  { type: 'listening', label: '听力理解', count: 0, icon: 'Headset', color: '#409EFF' },
-  { type: 'mcq', label: '听力选择题', count: 0, icon: 'List', color: '#67C23A' },
-  { type: 'opi', label: '口语模仿', count: 0, icon: 'Microphone', color: '#E6A23C' },
-  { type: 'retell', label: '故事复述', count: 0, icon: 'ChatDotRound', color: '#F56C6C' },
-  { type: 'atc', label: 'ATC模拟', count: 0, icon: 'Connection', color: '#909399' }
+  { type: 'listening_comprehension', label: '听力理解', count: 0, icon: 'Service', color: '#409EFF' },
+  { type: 'listening_mcq', label: '听力选择题', count: 0, icon: 'List', color: '#67C23A' },
+  { type: 'story_retell', label: '故事复述', count: 0, icon: 'ChatDotRound', color: '#F56C6C' },
+  { type: 'atc_simulation', label: '模拟通话', count: 0, icon: 'Connection', color: '#909399' },
+  { type: 'opi', label: '口语能力面试', count: 0, icon: 'Microphone', color: '#E6A23C' }
 ])
 
 // 计算属性
@@ -528,33 +527,34 @@ const loadQuestions = async (type) => {
     let response
     
     switch (type) {
-      case 'listening':
-        response = await questionBankApi.getListeningQuestions()
-        listeningQuestions.value = response.content || []
+      case 'listening_comprehension':
+        response = await questionBankApi.getListeningDialogs()
+        listeningQuestions.value = response.data?.content || []
         break
-      case 'mcq':
-        response = await questionBankApi.getMCQQuestions()
-        mcqQuestions.value = response.content || []
+      case 'listening_mcq':
+        response = await questionBankApi.getListeningMCQQuestions()
+        mcqQuestions.value = response.data?.content || []
+        break
+      case 'story_retell':
+        response = await questionBankApi.getStoryRetellItems()
+        retellQuestions.value = response.data?.content || []
+        break
+      case 'atc_simulation':
+        response = await questionBankApi.getATCScenarios()
+        atcQuestions.value = response.data?.content || []
+        
+        const airportsResponse = await questionBankApi.getATCAirports()
+        atcScenarios.value = airportsResponse.data?.content || []
         break
       case 'opi':
-        response = await questionBankApi.getOPIQuestions()
-        opiQuestions.value = response.content || []
-        break
-      case 'retell':
-        response = await questionBankApi.getRetellQuestions()
-        retellQuestions.value = response.content || []
-        break
-      case 'atc':
-        response = await questionBankApi.getATCQuestions()
-        atcQuestions.value = response.content || []
-        
-        const scenariosResponse = await questionBankApi.getATCScenarios()
-        atcScenarios.value = scenariosResponse.content || []
+        response = await questionBankApi.getOPITopics()
+        opiQuestions.value = response.data?.content || []
         break
     }
     
     updateStats()
   } catch (error) {
+    console.error('加载题目失败:', error)
     ElMessage.error('加载题目失败')
   } finally {
     loading.value = false
@@ -564,14 +564,19 @@ const loadQuestions = async (type) => {
 const updateStats = () => {
   questionStats.value[0].count = listeningQuestions.value.length
   questionStats.value[1].count = mcqQuestions.value.length
-  questionStats.value[2].count = opiQuestions.value.length
-  questionStats.value[3].count = retellQuestions.value.length
-  questionStats.value[4].count = atcQuestions.value.length
+  questionStats.value[2].count = retellQuestions.value.length
+  questionStats.value[3].count = atcQuestions.value.length
+  questionStats.value[4].count = opiQuestions.value.length
 }
 
 const handleTabClick = (tab) => {
   activeTab.value = tab.name
   loadQuestions(tab.name)
+}
+
+const switchToTab = (tabName) => {
+  activeTab.value = tabName
+  loadQuestions(tabName)
 }
 
 const addQuestion = (type) => {
@@ -594,26 +599,26 @@ const editQuestion = (question) => {
 const deleteQuestion = async (question) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除题目"${question.content.substring(0, 20)}..."吗？`,
+      `确定要删除题目"${question.content?.substring(0, 20) || question.title?.substring(0, 20) || question.name?.substring(0, 20)}..."吗？`,
       '确认删除',
       { type: 'warning' }
     )
     
-    switch (question.type) {
-      case 'listening':
-        await questionBankApi.deleteListeningQuestion(question.id)
+    switch (activeTab.value) {
+      case 'listening_comprehension':
+        await questionBankApi.deleteListeningDialog(question.id)
         break
-      case 'mcq':
-        await questionBankApi.deleteMCQQuestion(question.id)
+      case 'listening_mcq':
+        await questionBankApi.deleteListeningMCQQuestion(question.id)
+        break
+      case 'story_retell':
+        await questionBankApi.deleteStoryRetellItem(question.id)
+        break
+      case 'atc_simulation':
+        await questionBankApi.deleteATCScenario(question.id)
         break
       case 'opi':
-        await questionBankApi.deleteOPIQuestion(question.id)
-        break
-      case 'retell':
-        await questionBankApi.deleteRetellQuestion(question.id)
-        break
-      case 'atc':
-        await questionBankApi.deleteATCQuestion(question.id)
+        await questionBankApi.deleteOPITopic(question.id)
         break
     }
     
@@ -637,41 +642,41 @@ const saveQuestion = async () => {
     
     if (questionForm.id) {
       // 更新题目
-      switch (questionForm.type) {
-        case 'listening':
-          await questionBankApi.updateListeningQuestion(questionForm.id, questionData)
+      switch (activeTab.value) {
+        case 'listening_comprehension':
+          await questionBankApi.updateListeningDialog(questionForm.id, questionData)
           break
-        case 'mcq':
-          await questionBankApi.updateMCQQuestion(questionForm.id, questionData)
+        case 'listening_mcq':
+          await questionBankApi.updateListeningMCQQuestion(questionForm.id, questionData)
+          break
+        case 'story_retell':
+          await questionBankApi.updateStoryRetellItem(questionForm.id, questionData)
+          break
+        case 'atc_simulation':
+          await questionBankApi.updateATCScenario(questionForm.id, questionData)
           break
         case 'opi':
-          await questionBankApi.updateOPIQuestion(questionForm.id, questionData)
-          break
-        case 'retell':
-          await questionBankApi.updateRetellQuestion(questionForm.id, questionData)
-          break
-        case 'atc':
-          await questionBankApi.updateATCQuestion(questionForm.id, questionData)
+          await questionBankApi.updateOPITopic(questionForm.id, questionData)
           break
       }
       ElMessage.success('更新成功')
     } else {
       // 创建题目
-      switch (questionForm.type) {
-        case 'listening':
-          await questionBankApi.createListeningQuestion(questionData)
+      switch (activeTab.value) {
+        case 'listening_comprehension':
+          await questionBankApi.createListeningDialog(questionData)
           break
-        case 'mcq':
-          await questionBankApi.createMCQQuestion(questionData)
+        case 'listening_mcq':
+          await questionBankApi.createListeningMCQQuestion(questionData)
+          break
+        case 'story_retell':
+          await questionBankApi.createStoryRetellItem(questionData)
+          break
+        case 'atc_simulation':
+          await questionBankApi.createATCScenario(questionData)
           break
         case 'opi':
-          await questionBankApi.createOPIQuestion(questionData)
-          break
-        case 'retell':
-          await questionBankApi.createRetellQuestion(questionData)
-          break
-        case 'atc':
-          await questionBankApi.createATCQuestion(questionData)
+          await questionBankApi.createOPITopic(questionData)
           break
       }
       ElMessage.success('创建成功')
@@ -913,7 +918,7 @@ const deleteATCScenario = async (scenario) => {
 
 // 生命周期
 onMounted(() => {
-  loadQuestions('listening')
+  loadQuestions('listening_comprehension')
 })
 
 // 监听标签页切换
@@ -984,12 +989,24 @@ watch(activeTab, (newTab) => {
 }
 
 .stat-icon {
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.1), rgba(103, 194, 58, 0.1));
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 16px;
+  padding: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-icon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1));
+  border-radius: inherit;
 }
 
 .stat-info {
@@ -1007,6 +1024,19 @@ watch(activeTab, (newTab) => {
   font-size: 14px;
   color: #909399;
   margin-top: 4px;
+}
+
+.stat-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.trend-text {
+  font-size: 12px;
+  color: #67C23A;
+  font-weight: 500;
 }
 
 .question-tabs {

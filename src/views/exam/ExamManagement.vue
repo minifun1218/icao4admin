@@ -75,6 +75,7 @@
           <ExamInfoPanel 
             :exams="examList"
             :loading="loading"
+            :use-builtin-manager="true"
             @add="addExam"
             @edit="editExam"
             @delete="deleteExam"
@@ -102,22 +103,23 @@
           />
         </el-tab-pane>
 
-        <!-- 考试监控 -->
-        <el-tab-pane name="monitor">
+        <!-- 听力简答考试 -->
+        <el-tab-pane name="listening-comprehension">
           <template #label>
             <span class="tab-label">
-              <el-icon><Monitor /></el-icon>
-              考试监控
+              <el-icon><Service /></el-icon>
+              听力简答考试
             </span>
           </template>
-          <ExamMonitorPanel 
-            :ongoing-exams="ongoingExams"
-            :loading="loading"
-            @view-real-time="viewRealTimeStatus"
-            @force-submit="forceSubmitExam"
-            @view-progress="viewProgress"
+          <ListeningComprehensionExam 
+            :exam-data="listeningComprehensionData"
+            :show-admin-preview="true"
+            @exam-started="handleExamStarted"
+            @exam-completed="handleExamCompleted"
+            @answer-recorded="handleAnswerRecorded"
           />
         </el-tab-pane>
+
       </el-tabs>
     </el-card>
 
@@ -340,9 +342,9 @@ import { examApi } from '@/api/exam'
 import ExamPaperPanel from './components/ExamPaperPanel.vue'
 import ExamInfoPanel from './components/ExamInfoPanel.vue'
 import ExamResultPanel from './components/ExamResultPanel.vue'
-import ExamMonitorPanel from './components/ExamMonitorPanel.vue'
 import ParticipantsManagement from './components/ParticipantsManagement.vue'
 import ExamStatistics from './components/ExamStatistics.vue'
+import ListeningComprehensionExam from './components/ListeningComprehensionExam.vue'
 import {
   Medal,
   Plus,
@@ -350,8 +352,8 @@ import {
   Document,
   Clock,
   TrendCharts,
-  Monitor,
-  Edit
+  Edit,
+  Service
 } from '@element-plus/icons-vue'
 
 // 响应式数据
@@ -370,7 +372,62 @@ const currentExam = ref(null)
 const examPapers = ref([])
 const examList = ref([])
 const examResults = ref([])
-const ongoingExams = ref([])
+
+// 听力简答考试数据
+const listeningComprehensionData = ref({
+  id: 'listening-comprehension-demo',
+  title: '听力简答部分演示',
+  dialogs: [
+    {
+      id: 'dialog-1',
+      title: '机场延误情况',
+      content: 'Air traffic control to Flight 123, due to severe weather conditions at your destination airport, we need to hold your flight for approximately 30 minutes. There are strong winds and heavy rain making it unsafe for landing operations. We will update you as soon as conditions improve and provide further instructions.',
+      audioUrl: '/demo/audio/dialog1.mp3',
+      audioDuration: 45,
+      questions: [
+        {
+          id: 'q1-1',
+          questionText: 'What is the main reason for the flight delay?',
+          order: 1
+        },
+        {
+          id: 'q1-2', 
+          questionText: 'How long is the expected delay time?',
+          order: 2
+        },
+        {
+          id: 'q1-3',
+          questionText: 'What weather conditions are mentioned?',
+          order: 3
+        }
+      ]
+    },
+    {
+      id: 'dialog-2',
+      title: '紧急医疗情况',
+      content: 'Mayday, mayday, mayday. This is Flight 456. We have a medical emergency on board. A passenger is experiencing severe chest pain and difficulty breathing. We request immediate medical assistance upon landing and priority approach to the nearest airport. We have 180 passengers and 8 crew members on board.',
+      audioUrl: '/demo/audio/dialog2.mp3',
+      audioDuration: 50,
+      questions: [
+        {
+          id: 'q2-1',
+          questionText: 'What type of emergency is reported?',
+          order: 1
+        },
+        {
+          id: 'q2-2',
+          questionText: 'What assistance is requested?',
+          order: 2
+        },
+        {
+          id: 'q2-3',
+          questionText: 'How many people are on board?',
+          order: 3
+        }
+      ]
+    }
+  ]
+})
 
 // 表单数据
 const examForm = reactive({
@@ -401,8 +458,8 @@ const examForm = reactive({
 const examStats = ref([
   { type: 'papers', label: '试卷总数', count: 0, icon: 'Document', color: '#409EFF' },
   { type: 'exams', label: '考试总数', count: 0, icon: 'Clock', color: '#67C23A' },
-  { type: 'ongoing', label: '进行中', count: 0, icon: 'Monitor', color: '#E6A23C' },
-  { type: 'completed', label: '已完成', count: 0, icon: 'TrendCharts', color: '#909399' }
+  { type: 'results', label: '考试结果', count: 0, icon: 'TrendCharts', color: '#E6A23C' },
+  { type: 'completed', label: '已完成', count: 0, icon: 'Medal', color: '#909399' }
 ])
 
 // 选项数据
@@ -443,20 +500,19 @@ const loadExamData = async () => {
     loading.value = true
     
     // 并行加载各种数据
-    const [papersRes, examsRes, resultsRes, ongoingRes] = await Promise.all([
+    const [papersRes, examsRes, resultsRes] = await Promise.all([
       examApi.getExamPapers(),
       examApi.getExams(),
-      examApi.getExamResults(),
-      examApi.getOngoingExams()
+      examApi.getAllExamResults()
     ])
     
-    examPapers.value = papersRes.content || []
-    examList.value = examsRes.content || []
-    examResults.value = resultsRes.content || []
-    ongoingExams.value = ongoingRes.content || []
+    examPapers.value = papersRes.data?.content || []
+    examList.value = examsRes.data?.content || []
+    examResults.value = resultsRes.data?.content || []
     
     updateStats()
   } catch (error) {
+    console.error('加载数据失败:', error)
     ElMessage.error('加载数据失败')
   } finally {
     loading.value = false
@@ -466,7 +522,7 @@ const loadExamData = async () => {
 const updateStats = () => {
   examStats.value[0].count = examPapers.value.length
   examStats.value[1].count = examList.value.length
-  examStats.value[2].count = ongoingExams.value.length
+  examStats.value[2].count = examResults.value.length
   examStats.value[3].count = examList.value.filter(exam => exam.status === 'ended').length
 }
 
@@ -681,32 +737,6 @@ const viewStatistics = (exam) => {
   statisticsDialogVisible.value = true
 }
 
-// 监控方法
-const viewRealTimeStatus = (exam) => {
-  ElMessage.info('实时状态功能开发中...')
-}
-
-const forceSubmitExam = async (exam, user) => {
-  try {
-    await ElMessageBox.confirm(
-      `确定要强制提交用户"${user.name}"的考试吗？`,
-      '确认强制提交',
-      { type: 'warning' }
-    )
-    
-    await examApi.forceSubmitExam(exam.id, user.id)
-    ElMessage.success('强制提交成功')
-    loadExamData()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('强制提交失败')
-    }
-  }
-}
-
-const viewProgress = (exam, user) => {
-  ElMessage.info('进度查看功能开发中...')
-}
 
 const viewParticipants = (exam) => {
   currentExam.value = exam
@@ -725,6 +755,32 @@ const exportExamData = async () => {
     ElMessage.success('导出成功')
   } catch (error) {
     ElMessage.error('导出失败')
+  }
+}
+
+// 听力简答考试事件处理
+const handleExamStarted = (examData) => {
+  console.log('听力简答考试开始:', examData)
+  ElMessage.success('听力简答考试已开始')
+}
+
+const handleExamCompleted = (examResult) => {
+  console.log('听力简答考试完成:', examResult)
+  ElMessage.success('听力简答考试已完成')
+  
+  // 保存考试结果
+  // 这里可以调用API保存考试结果
+  // await examApi.saveListeningComprehensionResult(examResult)
+}
+
+const handleAnswerRecorded = (answerData) => {
+  console.log('录音答案:', answerData)
+  
+  if (answerData.action === 'start') {
+    console.log('开始录音:', answerData.questionId)
+  } else if (answerData.action === 'stop') {
+    console.log('结束录音:', answerData.questionId)
+    // 这里可以处理录音数据的保存
   }
 }
 

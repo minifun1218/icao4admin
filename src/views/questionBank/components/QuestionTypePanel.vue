@@ -81,7 +81,7 @@
               <div class="content-text">{{ row.content }}</div>
               <div class="content-meta">
                 <el-tag v-if="row.audioUrl" size="small" type="info">
-                  <el-icon><Headset /></el-icon>
+                  <el-icon><Service /></el-icon>
                   音频
                 </el-tag>
                 <el-tag 
@@ -137,7 +137,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" :width="type === 'listening_comprehension' ? 300 : 200" fixed="right">
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button 
@@ -149,6 +149,19 @@
                 <el-icon><Edit /></el-icon>
                 编辑
               </el-button>
+              
+              <!-- 听力理解特殊操作 -->
+              <el-button 
+                v-if="type === 'listening_comprehension'" 
+                type="success" 
+                size="small" 
+                @click="manageQuestions(row)"
+                link
+              >
+                <el-icon><Plus /></el-icon>
+                题干管理
+              </el-button>
+              
               <el-button 
                 type="info" 
                 size="small" 
@@ -264,7 +277,7 @@ import {
   Edit,
   Delete,
   View,
-  Headset,
+  Service,
   Check
 } from '@element-plus/icons-vue'
 
@@ -285,7 +298,7 @@ const props = defineProps({
 })
 
 // Emits
-const emit = defineEmits(['add', 'edit', 'delete', 'selection-change'])
+const emit = defineEmits(['add', 'edit', 'delete', 'selection-change', 'manage-questions'])
 
 // 响应式数据
 const previewDialogVisible = ref(false)
@@ -425,6 +438,10 @@ const previewQuestion = (question) => {
   previewDialogVisible.value = true
 }
 
+const manageQuestions = (dialog) => {
+  emit('manage-questions', dialog)
+}
+
 const batchEdit = () => {
   if (selectedQuestions.value.length === 0) {
     ElMessage.warning('请选择要编辑的题目')
@@ -508,6 +525,7 @@ watch(() => props.questions, () => {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  line-clamp: 2;
   overflow: hidden;
 }
 

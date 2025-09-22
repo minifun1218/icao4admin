@@ -1,313 +1,266 @@
-import api from './index'
+import { paperApi } from './paper'
+import { resultApi } from './result'
 
-// 考试管理相关API
+/**
+ * 考试管理统一API接口
+ * 整合试卷管理(paperApi)和考试结果管理(resultApi)功能
+ */
 export const examApi = {
-  // ==================== 试卷管理 ====================
+  // ==================== 试卷相关API (委托给paperApi) ====================
   
-  // 获取试卷列表
+  // 获取试卷列表 (作为考试试卷)
   getExamPapers(params = {}) {
-    return api.get('/exam/papers', { params })
+    return paperApi.getPapers(params)
   },
 
   // 根据ID获取试卷详情
   getExamPaperById(id) {
-    return api.get(`/exam/papers/${id}`)
+    return paperApi.getPaperById(id)
   },
 
   // 创建试卷
   createExamPaper(data) {
-    return api.post('/exam/papers', data)
+    return paperApi.createPaper(data)
   },
 
   // 更新试卷
   updateExamPaper(id, data) {
-    return api.put(`/exam/papers/${id}`, data)
+    return paperApi.updatePaper(id, data)
   },
 
   // 删除试卷
   deleteExamPaper(id) {
-    return api.delete(`/exam/papers/${id}`)
+    return paperApi.deletePaper(id)
   },
 
   // 批量删除试卷
   batchDeleteExamPapers(paperIds) {
-    return api.delete('/exam/papers/batch', { data: { paperIds } })
+    return paperApi.batchDeletePapers(paperIds)
   },
 
   // 复制试卷
   copyExamPaper(id) {
-    return api.post(`/exam/papers/${id}/copy`)
+    return paperApi.copyPaper(id)
   },
 
   // 发布试卷
   publishExamPaper(id) {
-    return api.put(`/exam/papers/${id}/publish`)
+    return paperApi.publishPaper(id)
   },
 
   // 取消发布试卷
   unpublishExamPaper(id) {
-    return api.put(`/exam/papers/${id}/unpublish`)
+    return paperApi.unpublishPaper(id)
   },
 
   // 预览试卷
   previewExamPaper(id) {
-    return api.get(`/exam/papers/${id}/preview`)
+    return paperApi.previewPaper(id)
   },
 
-  // 导出试卷
-  exportExamPaper(id) {
-    return api.get(`/exam/papers/${id}/export`, {
-      responseType: 'blob'
-    })
+  // 获取试卷统计信息
+  getExamPaperStatistics(id) {
+    return paperApi.getPaperStatistics(id)
   },
 
-  // ==================== 试卷题目管理 ====================
+  // ==================== 考试管理API (基于试卷的考试实例) ====================
   
-  // 获取试卷题目列表
-  getExamPaperQuestions(paperId, params = {}) {
-    return api.get(`/exam/papers/${paperId}/questions`, { params })
-  },
-
-  // 添加题目到试卷
-  addQuestionToPaper(paperId, questionData) {
-    return api.post(`/exam/papers/${paperId}/questions`, questionData)
-  },
-
-  // 批量添加题目到试卷
-  batchAddQuestionsToPaper(paperId, questionIds) {
-    return api.post(`/exam/papers/${paperId}/questions/batch`, { questionIds })
-  },
-
-  // 从试卷移除题目
-  removeQuestionFromPaper(paperId, questionId) {
-    return api.delete(`/exam/papers/${paperId}/questions/${questionId}`)
-  },
-
-  // 更新试卷中题目的顺序和分值
-  updatePaperQuestion(paperId, questionId, data) {
-    return api.put(`/exam/papers/${paperId}/questions/${questionId}`, data)
-  },
-
-  // 自动组卷（根据条件自动选择题目）
-  autoGeneratePaper(paperId, criteria) {
-    return api.post(`/exam/papers/${paperId}/auto-generate`, criteria)
-  },
-
-  // ==================== 考试信息管理 ====================
-  
-  // 获取考试列表
+  // 获取考试列表 (实际上是获取已发布的试卷作为考试)
   getExams(params = {}) {
-    return api.get('/exam/exams', { params })
+    // 获取已发布状态的试卷作为考试
+    return paperApi.getPapers({ 
+      ...params, 
+      status: params.status || 'published' 
+    })
   },
 
   // 根据ID获取考试详情
   getExamById(id) {
-    return api.get(`/exam/exams/${id}`)
+    return paperApi.getPaperById(id)
   },
 
-  // 创建考试
+  // 创建考试 (实际上是创建试卷)
   createExam(data) {
-    return api.post('/exam/exams', data)
+    // 将考试数据转换为试卷数据格式
+    const paperData = {
+      title: data.name || data.title,
+      type: data.type,
+      description: data.description,
+      duration: data.duration,
+      passingScore: data.passingScore,
+      status: data.status || 'draft',
+      settings: data.settings,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      maxParticipants: data.maxParticipants,
+      retakeLimit: data.retakeLimit,
+      scoringMethod: data.scoringMethod,
+      remark: data.remark
+    }
+    return paperApi.createPaper(paperData)
   },
 
-  // 更新考试信息
+  // 更新考试
   updateExam(id, data) {
-    return api.put(`/exam/exams/${id}`, data)
+    const paperData = {
+      title: data.name || data.title,
+      type: data.type,
+      description: data.description,
+      duration: data.duration,
+      passingScore: data.passingScore,
+      status: data.status,
+      settings: data.settings,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      maxParticipants: data.maxParticipants,
+      retakeLimit: data.retakeLimit,
+      scoringMethod: data.scoringMethod,
+      remark: data.remark
+    }
+    return paperApi.updatePaper(id, paperData)
   },
 
   // 删除考试
   deleteExam(id) {
-    return api.delete(`/exam/exams/${id}`)
+    return paperApi.deletePaper(id)
   },
 
-  // 批量删除考试
-  batchDeleteExams(examIds) {
-    return api.delete('/exam/exams/batch', { data: { examIds } })
-  },
-
-  // 开始考试
+  // 开始考试 (发布试卷)
   startExam(id) {
-    return api.put(`/exam/exams/${id}/start`)
+    return paperApi.publishPaper(id)
   },
 
-  // 结束考试
+  // 结束考试 (取消发布试卷)
   endExam(id) {
-    return api.put(`/exam/exams/${id}/end`)
+    return paperApi.unpublishPaper(id)
   },
 
-  // 暂停考试
-  pauseExam(id) {
-    return api.put(`/exam/exams/${id}/pause`)
-  },
-
-  // 恢复考试
-  resumeExam(id) {
-    return api.put(`/exam/exams/${id}/resume`)
-  },
-
-  // 取消考试
-  cancelExam(id) {
-    return api.put(`/exam/exams/${id}/cancel`)
-  },
-
-  // ==================== 考试参与者管理 ====================
+  // ==================== 考试结果相关API (委托给resultApi) ====================
   
-  // 获取考试参与者列表
-  getExamParticipants(examId, params = {}) {
-    return api.get(`/exam/exams/${examId}/participants`, { params })
+  // 获取所有考试结果
+  getAllExamResults(params = {}) {
+    return resultApi.getResults(params)
   },
 
-  // 添加参与者到考试
-  addParticipantToExam(examId, userData) {
-    return api.post(`/exam/exams/${examId}/participants`, userData)
-  },
-
-  // 批量添加参与者
-  batchAddParticipants(examId, userIds) {
-    return api.post(`/exam/exams/${examId}/participants/batch`, { userIds })
-  },
-
-  // 从考试中移除参与者
-  removeParticipantFromExam(examId, userId) {
-    return api.delete(`/exam/exams/${examId}/participants/${userId}`)
-  },
-
-  // 导入参与者名单
-  importParticipants(examId, file) {
-    const formData = new FormData()
-    formData.append('file', file)
-    return api.post(`/exam/exams/${examId}/participants/import`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
-  },
-
-  // ==================== 考试结果管理 ====================
-  
-  // 获取考试结果列表
+  // 根据考试ID获取结果
   getExamResults(examId, params = {}) {
-    return api.get(`/exam/exams/${examId}/results`, { params })
+    return resultApi.getResultsByExamId(examId, params)
   },
 
-  // 根据ID获取考试结果详情
-  getExamResultById(resultId) {
-    return api.get(`/exam/results/${resultId}`)
-  },
-
-  // 获取用户的考试结果
+  // 根据用户ID获取结果
   getUserExamResults(userId, params = {}) {
-    return api.get(`/exam/users/${userId}/results`, { params })
+    return resultApi.getResultsByUserId(userId, params)
+  },
+
+  // 获取考试结果详情
+  getExamResultById(id) {
+    return resultApi.getResultById(id)
+  },
+
+  // 创建考试结果
+  createExamResult(data) {
+    return resultApi.createResult(data)
+  },
+
+  // 更新考试结果
+  updateExamResult(id, data) {
+    return resultApi.updateResult(id, data)
+  },
+
+  // 删除考试结果
+  deleteExamResult(id) {
+    return resultApi.deleteResult(id)
   },
 
   // 重新评分
-  reScoreExamResult(resultId) {
-    return api.post(`/exam/results/${resultId}/re-score`)
-  },
-
-  // 批量重新评分
-  batchReScoreResults(resultIds) {
-    return api.post('/exam/results/batch-re-score', { resultIds })
+  reScoreExamResult(id, options = {}) {
+    return resultApi.reScore(id, options)
   },
 
   // 导出考试结果
-  exportExamResults(examId, params = {}) {
-    return api.get(`/exam/exams/${examId}/results/export`, {
-      params,
-      responseType: 'blob'
-    })
+  exportExamResults(examId = null, format = 'excel') {
+    if (examId) {
+      return resultApi.exportStatisticsReport(examId, format)
+    } else {
+      return resultApi.batchExportResults([], format)
+    }
   },
 
-  // 导出成绩单
-  exportGradeReport(examId, format = 'excel') {
-    return api.get(`/exam/exams/${examId}/grade-report`, {
-      params: { format },
-      responseType: 'blob'
-    })
-  },
-
-  // ==================== 考试统计分析 ====================
-  
-  // 获取考试统计概览
+  // 获取考试统计
   getExamStatistics(examId) {
-    return api.get(`/exam/exams/${examId}/statistics`)
+    return resultApi.getExamStatistics(examId)
   },
 
-  // 获取考试成绩分布
-  getScoreDistribution(examId) {
-    return api.get(`/exam/exams/${examId}/score-distribution`)
-  },
-
-  // 获取题目正确率统计
-  getQuestionAccuracy(examId) {
-    return api.get(`/exam/exams/${examId}/question-accuracy`)
-  },
-
-  // 获取考试时间分析
-  getExamTimeAnalysis(examId) {
-    return api.get(`/exam/exams/${examId}/time-analysis`)
-  },
-
-  // 获取考试排名
-  getExamRanking(examId, params = {}) {
-    return api.get(`/exam/exams/${examId}/ranking`, { params })
-  },
-
-  // 获取系统考试统计
-  getSystemExamStats(params = {}) {
-    return api.get('/exam/stats', { params })
-  },
-
-  // ==================== 考试监控 ====================
+  // ==================== 组合API方法 ====================
   
-  // 获取正在进行的考试列表
-  getOngoingExams(params = {}) {
-    return api.get('/exam/ongoing', { params })
+  // 获取考试完整信息 (试卷 + 结果统计)
+  async getExamFullInfo(examId) {
+    try {
+      const [examInfo, examStats] = await Promise.all([
+        this.getExamById(examId),
+        this.getExamStatistics(examId).catch(() => ({ data: {} }))
+      ])
+      
+      return {
+        data: {
+          ...examInfo.data,
+          statistics: examStats.data
+        }
+      }
+    } catch (error) {
+      console.error('获取考试完整信息失败:', error)
+      throw error
+    }
   },
 
-  // 获取考试实时状态
-  getExamRealTimeStatus(examId) {
-    return api.get(`/exam/exams/${examId}/real-time-status`)
-  },
-
-  // 获取考生答题进度
-  getParticipantProgress(examId, userId) {
-    return api.get(`/exam/exams/${examId}/participants/${userId}/progress`)
-  },
-
-  // 强制提交考试
-  forceSubmitExam(examId, userId) {
-    return api.post(`/exam/exams/${examId}/participants/${userId}/force-submit`)
+  // 获取考试参与者列表
+  async getExamParticipants(examId, params = {}) {
+    try {
+      const response = await this.getExamResults(examId, params)
+      return {
+        data: {
+          content: response.data?.content || [],
+          total: response.data?.total || 0
+        }
+      }
+    } catch (error) {
+      console.error('获取考试参与者失败:', error)
+      throw error
+    }
   },
 
   // ==================== 工具方法 ====================
   
-  // 获取考试状态选项
-  getExamStatusOptions() {
-    return [
-      { value: 'draft', label: '草稿', color: 'info' },
-      { value: 'published', label: '已发布', color: 'success' },
-      { value: 'ongoing', label: '进行中', color: 'warning' },
-      { value: 'ended', label: '已结束', color: 'primary' },
-      { value: 'cancelled', label: '已取消', color: 'danger' }
-    ]
-  },
-
   // 获取试卷类型选项
   getPaperTypeOptions() {
+    return paperApi.getPaperTypeOptions()
+  },
+
+  // 获取试卷状态选项 (作为考试状态)
+  getExamStatusOptions() {
     return [
-      { value: 'practice', label: '练习试卷', icon: 'Edit' },
-      { value: 'mock', label: '模拟考试', icon: 'Clock' },
-      { value: 'formal', label: '正式考试', icon: 'Medal' },
-      { value: 'placement', label: '分级考试', icon: 'TrendCharts' }
+      { value: 'draft', label: '草稿', color: '#909399' },
+      { value: 'published', label: '已发布', color: '#67C23A' },
+      { value: 'ongoing', label: '进行中', color: '#E6A23C' },
+      { value: 'ended', label: '已结束', color: '#409EFF' },
+      { value: 'cancelled', label: '已取消', color: '#F56C6C' },
+      { value: 'archived', label: '已归档', color: '#606266' }
     ]
   },
 
-  // 获取评分方式选项
+  // 获取评分方法选项
   getScoringMethodOptions() {
     return [
       { value: 'auto', label: '自动评分' },
       { value: 'manual', label: '人工评分' },
-      { value: 'mixed', label: '混合评分' }
+      { value: 'mixed', label: '混合评分' },
+      { value: 'ai_assisted', label: 'AI辅助评分' }
     ]
+  },
+
+  // 获取考试结果状态选项
+  getExamResultStatusOptions() {
+    return resultApi.getResultStatusOptions()
   },
 
   // 格式化考试状态
@@ -317,42 +270,228 @@ export const examApi = {
       'published': '已发布',
       'ongoing': '进行中',
       'ended': '已结束',
-      'cancelled': '已取消'
+      'cancelled': '已取消',
+      'archived': '已归档'
     }
     return statusMap[status] || status
   },
 
   // 格式化试卷类型
   formatPaperType(type) {
-    const typeMap = {
-      'practice': '练习试卷',
-      'mock': '模拟考试',
-      'formal': '正式考试',
-      'placement': '分级考试'
+    return paperApi.formatPaperType(type)
+  },
+
+  // 格式化考试结果状态
+  formatExamResultStatus(status) {
+    return resultApi.formatResultStatus(status)
+  },
+
+  // 验证考试数据
+  validateExamData(examData) {
+    const errors = []
+    
+    if (!examData.name && !examData.title) {
+      errors.push('考试名称不能为空')
     }
-    return typeMap[type] || type
+    
+    if (!examData.type) {
+      errors.push('请选择考试类型')
+    }
+    
+    if (!examData.duration || examData.duration <= 0) {
+      errors.push('考试时长必须大于0分钟')
+    }
+    
+    if (examData.startTime && examData.endTime) {
+      if (new Date(examData.startTime) >= new Date(examData.endTime)) {
+        errors.push('开始时间必须早于结束时间')
+      }
+    }
+    
+    if (examData.passingScore !== undefined) {
+      if (examData.passingScore < 0 || examData.passingScore > 100) {
+        errors.push('及格分数必须在0-100之间')
+      }
+    }
+    
+    if (examData.maxParticipants !== undefined && examData.maxParticipants <= 0) {
+      errors.push('最大参与人数必须大于0')
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    }
   },
 
-  // 计算考试时长（分钟）
-  calculateExamDuration(startTime, endTime) {
-    if (!startTime || !endTime) return 0
-    const start = new Date(startTime)
-    const end = new Date(endTime)
-    return Math.floor((end - start) / (1000 * 60))
+  // 计算考试统计信息
+  calculateExamStats(exams = [], results = []) {
+    const stats = {
+      totalExams: exams.length,
+      draftExams: 0,
+      publishedExams: 0,
+      ongoingExams: 0,
+      endedExams: 0,
+      cancelledExams: 0,
+      totalResults: results.length,
+      completedResults: 0,
+      averageScore: 0,
+      passRate: 0
+    }
+
+    // 统计考试状态
+    exams.forEach(exam => {
+      switch (exam.status) {
+        case 'draft':
+          stats.draftExams++
+          break
+        case 'published':
+          stats.publishedExams++
+          break
+        case 'ongoing':
+          stats.ongoingExams++
+          break
+        case 'ended':
+          stats.endedExams++
+          break
+        case 'cancelled':
+          stats.cancelledExams++
+          break
+      }
+    })
+
+    // 统计考试结果
+    if (results.length > 0) {
+      const completedResults = results.filter(r => r.status === 'completed')
+      stats.completedResults = completedResults.length
+
+      if (completedResults.length > 0) {
+        const totalScore = completedResults.reduce((sum, r) => sum + (r.score || 0), 0)
+        stats.averageScore = Math.round(totalScore / completedResults.length)
+        
+        const passedResults = completedResults.filter(r => 
+          resultApi.calculatePassStatus(r.score, r.passingScore || 60)
+        )
+        stats.passRate = Math.round((passedResults.length / completedResults.length) * 100)
+      }
+    }
+
+    return stats
   },
 
-  // 格式化分数
-  formatScore(score, maxScore = 100) {
-    if (score === null || score === undefined) return '-'
-    return `${score}/${maxScore}`
+  // ==================== 批量操作方法 ====================
+  
+  // 批量发布考试
+  async batchPublishExams(examIds) {
+    try {
+      const promises = examIds.map(id => this.startExam(id))
+      await Promise.all(promises)
+      return { success: true, message: `成功发布 ${examIds.length} 个考试` }
+    } catch (error) {
+      console.error('批量发布考试失败:', error)
+      throw error
+    }
   },
 
-  // 计算通过率
-  calculatePassRate(results, passingScore = 60) {
-    if (!results || results.length === 0) return 0
-    const passedCount = results.filter(result => result.score >= passingScore).length
-    return Math.round((passedCount / results.length) * 100)
+  // 批量结束考试
+  async batchEndExams(examIds) {
+    try {
+      const promises = examIds.map(id => this.endExam(id))
+      await Promise.all(promises)
+      return { success: true, message: `成功结束 ${examIds.length} 个考试` }
+    } catch (error) {
+      console.error('批量结束考试失败:', error)
+      throw error
+    }
+  },
+
+  // 批量删除考试
+  async batchDeleteExams(examIds) {
+    try {
+      const promises = examIds.map(id => this.deleteExam(id))
+      await Promise.all(promises)
+      return { success: true, message: `成功删除 ${examIds.length} 个考试` }
+    } catch (error) {
+      console.error('批量删除考试失败:', error)
+      throw error
+    }
+  },
+
+  // ==================== 高级搜索方法 ====================
+  
+  // 搜索考试
+  searchExams(params = {}) {
+    return paperApi.searchPapers(params)
+  },
+
+  // 高级搜索考试
+  advancedSearchExams(criteria) {
+    return paperApi.advancedSearchPapers(criteria)
+  },
+
+  // 搜索考试结果
+  searchExamResults(params = {}) {
+    return resultApi.searchResults(params)
+  },
+
+  // ==================== 数据导入导出方法 ====================
+  
+  // 导出考试数据
+  async exportExamData(examIds = [], format = 'excel') {
+    try {
+      if (examIds.length === 0) {
+        // 导出所有考试数据
+        return await paperApi.batchExportPapers(examIds, format)
+      } else {
+        // 导出指定考试数据
+        return await paperApi.batchExportPapers(examIds, format)
+      }
+    } catch (error) {
+      console.error('导出考试数据失败:', error)
+      throw error
+    }
+  },
+
+  // 导入考试数据
+  async importExamData(file, options = {}) {
+    try {
+      return await paperApi.importPaper(file, options)
+    } catch (error) {
+      console.error('导入考试数据失败:', error)
+      throw error
+    }
+  },
+
+  // ==================== 权限和安全方法 ====================
+  
+  // 检查考试操作权限
+  checkExamPermission(exam, operation) {
+    // 基础权限检查逻辑
+    const permissions = {
+      edit: exam.status !== 'ongoing',
+      delete: exam.status !== 'ongoing',
+      start: ['draft', 'published'].includes(exam.status),
+      end: exam.status === 'ongoing',
+      view: true,
+      export: true
+    }
+    
+    return permissions[operation] || false
+  },
+
+  // 获取考试权限信息
+  getExamPermissions(examId) {
+    return paperApi.getPaperPermissions(examId)
+  },
+
+  // 设置考试权限
+  setExamPermissions(examId, permissions) {
+    return paperApi.setPaperPermissions(examId, permissions)
   }
 }
 
+// 兼容性导出
 export default examApi
+
+// 重新导出paperApi和resultApi以便直接使用
+export { paperApi, resultApi }
