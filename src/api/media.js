@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import { createApiMethod } from '@/utils/request'
+import { AuthUtils } from '@/utils/auth'
 
 /**
  * 媒体资源管理 API
@@ -13,10 +14,12 @@ import { createApiMethod } from '@/utils/request'
  * POST /media/upload
  */
 export const uploadMediaFile = (formData, config = {}) => {
-  return request.post('/media/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    },
+  const uploadPath = import.meta.env.VITE_MEDIA_UPLOAD_PATH || '/media/upload'
+  return request.post(uploadPath, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+    timeout: 60000, // 上传文件可能需要更长时间
     ...config
   })
 }
@@ -188,37 +191,54 @@ export const validateFileType = (file, allowedTypes = []) => {
 }
 
 /**
+ * 添加认证参数到URL
+ */
+const addAuthToUrl = (url) => {
+  if (!url) return null
+  
+  const token = AuthUtils.getToken()
+  if (!token) return url
+  
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}token=${encodeURIComponent(token)}`
+}
+
+/**
  * 获取文件预览URL
  */
 export const getPreviewUrl = (mediaAsset) => {
   if (!mediaAsset) return null
   
+  let url = null
+  
   // 如果有预览URL，检查是否为完整URL
   if (mediaAsset.previewUrl) {
     if (mediaAsset.previewUrl.startsWith('http')) {
-      return mediaAsset.previewUrl
+      url = mediaAsset.previewUrl
+    } else {
+      // 相对路径，添加API前缀
+      url = mediaAsset.previewUrl.startsWith('/api') ? mediaAsset.previewUrl : `/api${mediaAsset.previewUrl}`
     }
-    // 相对路径，添加API前缀
-    return mediaAsset.previewUrl.startsWith('/api') ? mediaAsset.previewUrl : `/api${mediaAsset.previewUrl}`
   }
-  
   // 如果有文件URL，检查是否为完整URL
-  if (mediaAsset.fileUrl) {
+  else if (mediaAsset.fileUrl) {
     if (mediaAsset.fileUrl.startsWith('http')) {
-      return mediaAsset.fileUrl
+      url = mediaAsset.fileUrl
+    } else {
+      // 相对路径，添加API前缀
+      url = mediaAsset.fileUrl.startsWith('/api') ? mediaAsset.fileUrl : `/api${mediaAsset.fileUrl}`
     }
-    // 相对路径，添加API前缀
-    return mediaAsset.fileUrl.startsWith('/api') ? mediaAsset.fileUrl : `/api${mediaAsset.fileUrl}`
   }
-  
   // 构建预览URL
-  const filename = mediaAsset.filename || mediaAsset.originalFilename
-  if (filename) {
-    const basePath = import.meta.env.VITE_MEDIA_PREVIEW_PATH || '/api/media/preview'
-    return `${basePath}/${filename}`
+  else {
+    const filename = mediaAsset.filename || mediaAsset.originalFilename
+    if (filename) {
+      const basePath = import.meta.env.VITE_MEDIA_PREVIEW_PATH || '/api/media/preview'
+      url = `${basePath}/${filename}`
+    }
   }
   
-  return null
+  return addAuthToUrl(url)
 }
 
 /**
@@ -227,22 +247,27 @@ export const getPreviewUrl = (mediaAsset) => {
 export const getDownloadUrl = (mediaAsset) => {
   if (!mediaAsset) return null
   
+  let url = null
+  
   // 如果有下载URL，检查是否为完整URL
   if (mediaAsset.downloadUrl) {
     if (mediaAsset.downloadUrl.startsWith('http')) {
-      return mediaAsset.downloadUrl
+      url = mediaAsset.downloadUrl
+    } else {
+      // 相对路径，添加API前缀
+      url = mediaAsset.downloadUrl.startsWith('/api') ? mediaAsset.downloadUrl : `/api${mediaAsset.downloadUrl}`
     }
-    // 相对路径，添加API前缀
-    return mediaAsset.downloadUrl.startsWith('/api') ? mediaAsset.downloadUrl : `/api${mediaAsset.downloadUrl}`
   }
-  
   // 构建下载URL
-  const filename = mediaAsset.filename || mediaAsset.originalFilename
-  if (filename) {
-    return `/api/media/download/${filename}`
+  else {
+    const filename = mediaAsset.filename || mediaAsset.originalFilename
+    if (filename) {
+      const basePath = import.meta.env.VITE_MEDIA_DOWNLOAD_PATH || '/api/media/download'
+      url = `${basePath}/${filename}`
+    }
   }
   
-  return null
+  return addAuthToUrl(url)
 }
 
 /**
@@ -251,27 +276,36 @@ export const getDownloadUrl = (mediaAsset) => {
 export const getThumbnailUrl = (mediaAsset) => {
   if (!mediaAsset) return null
   
+  let url = null
+  
   // 如果有缩略图URL，检查是否为完整URL
   if (mediaAsset.thumbnailUrl) {
     if (mediaAsset.thumbnailUrl.startsWith('http')) {
-      return mediaAsset.thumbnailUrl
+      url = mediaAsset.thumbnailUrl
+    } else {
+      // 相对路径，添加API前缀
+      url = mediaAsset.thumbnailUrl.startsWith('/api') ? mediaAsset.thumbnailUrl : `/api${mediaAsset.thumbnailUrl}`
     }
-    // 相对路径，添加API前缀
-    return mediaAsset.thumbnailUrl.startsWith('/api') ? mediaAsset.thumbnailUrl : `/api${mediaAsset.thumbnailUrl}`
   }
-  
   // 对于图片类型，使用预览URL作为缩略图
-  if (mediaAsset.isImage && mediaAsset.previewUrl) {
-    return getPreviewUrl(mediaAsset)
+  else if (mediaAsset.isImage && mediaAsset.previewUrl) {
+    // 直接构建URL，避免重复调用getPreviewUrl导致双重token
+    if (mediaAsset.previewUrl.startsWith('http')) {
+      url = mediaAsset.previewUrl
+    } else {
+      url = mediaAsset.previewUrl.startsWith('/api') ? mediaAsset.previewUrl : `/api${mediaAsset.previewUrl}`
+    }
   }
-  
   // 构建缩略图URL
-  const filename = mediaAsset.filename || mediaAsset.originalFilename
-  if (filename && mediaAsset.isImage) {
-    return `/api/media/thumbnail/${filename}`
+  else {
+    const filename = mediaAsset.filename || mediaAsset.originalFilename
+    if (filename && mediaAsset.isImage) {
+      const basePath = import.meta.env.VITE_MEDIA_THUMBNAIL_PATH || '/api/media/thumbnail'
+      url = `${basePath}/${filename}`
+    }
   }
   
-  return null
+  return addAuthToUrl(url)
 }
 
 // ==================== 高级搜索 ====================

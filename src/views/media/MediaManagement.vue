@@ -207,7 +207,7 @@
             <div class="media-preview">
               <div v-if="media.isImage" class="image-preview">
                 <el-image 
-                  :src="getThumbnailUrl(media) || getPreviewUrl(media)" 
+                  :src="getCachedMediaUrl(media, 'preview')"
                   fit="cover"
                   lazy
                   class="preview-image"
@@ -224,14 +224,14 @@
                 <div class="media-icon">
                   <el-icon size="48" :color="getMediaTypeColor(media)"><VideoPlay /></el-icon>
                 </div>
-                <audio v-if="media.previewUrl" :src="getPreviewUrl(media)" controls class="audio-player" />
+                <audio v-if="media.previewUrl" :src="getCachedMediaUrl(media, 'preview')" controls class="audio-player" />
               </div>
               
               <div v-else-if="media.isVideo" class="video-preview">
                 <div class="media-icon">
                   <el-icon size="48" :color="getMediaTypeColor(media)"><VideoCamera /></el-icon>
                 </div>
-                <video v-if="media.previewUrl" :src="getPreviewUrl(media)" controls class="video-player" />
+                <video v-if="media.previewUrl" :src="getCachedMediaUrl(media, 'preview')" controls class="video-player" />
               </div>
               
               <div v-else class="doc-preview">
@@ -278,7 +278,7 @@
               <div class="table-preview">
                 <el-image
                   v-if="scope.row.isImage"
-                  :src="getThumbnailUrl(scope.row) || getPreviewUrl(scope.row)"
+                  :src="getCachedMediaUrl(scope.row, 'preview')"
                   fit="cover"
                   class="table-thumbnail"
                   lazy
@@ -473,7 +473,7 @@
                 </div>
                 <audio 
                   v-if="currentMedia.previewUrl" 
-                  :src="getPreviewUrl(currentMedia)" 
+                  :src="getCachedMediaUrl(currentMedia, 'preview')" 
                   controls 
                   class="detail-audio"
                 />
@@ -482,7 +482,7 @@
               <div v-else-if="currentMedia.isVideo" class="video-detail">
                 <video 
                   v-if="currentMedia.previewUrl" 
-                  :src="getPreviewUrl(currentMedia)" 
+                  :src="getCachedMediaUrl(currentMedia, 'preview')" 
                   controls 
                   class="detail-video"
                 />
@@ -642,8 +642,16 @@ import {
   getThumbnailUrl,
   formatDuration,
   getMediaTypeIcon,
-  getMediaTypeColor
+  getMediaTypeColor,
+  formatFileSize
 } from '@/api/media'
+import { 
+  MEDIA_CONFIG, 
+  validateFileType, 
+  validateFileSize, 
+  getMaxFileSizeText, 
+  getSupportedTypesText 
+} from '@/utils/media-config'
 
 // 响应式数据
 const loading = ref(false)
@@ -712,10 +720,52 @@ const isDevelopment = computed(() => {
   return import.meta.env.DEV
 })
 
+// 媒体URL刷新机制
+const mediaUrlCache = reactive(new Map())
+
+// 获取带缓存的媒体URL
+const getCachedMediaUrl = (mediaAsset, type = 'preview') => {
+  if (!mediaAsset) return null
+  
+  const cacheKey = `${mediaAsset.id || mediaAsset.filename}_${type}`
+  
+  if (mediaUrlCache.has(cacheKey)) {
+    return mediaUrlCache.get(cacheKey)
+  }
+  
+  let url = null
+  switch (type) {
+    case 'preview':
+      url = getPreviewUrl(mediaAsset)
+      break
+    case 'thumbnail':
+      url = getPreviewUrl(mediaAsset)
+      break
+    case 'download':
+      url = getDownloadUrl(mediaAsset)
+      break
+    default:
+      url = getPreviewUrl(mediaAsset)
+  }
+  
+  if (url) {
+    mediaUrlCache.set(cacheKey, url)
+  }
+  
+  return url
+}
+
+// 清除URL缓存
+const clearMediaUrlCache = () => {
+  mediaUrlCache.clear()
+}
+
 // 方法
 const loadMediaList = async () => {
   try {
     loading.value = true
+    // 清除URL缓存，确保使用最新的token
+    clearMediaUrlCache()
     const params = {
       page: pagination.page - 1,
       size: pagination.size
@@ -1011,12 +1061,18 @@ const handleFileChange = (file) => {
 }
 
 const beforeUpload = (file) => {
-  const isValidSize = file.size / 1024 / 1024 < 100
-  
-  if (!isValidSize) {
-    ElMessage.error('文件大小不能超过 100MB')
+  // 验证文件类型
+  if (!validateFileType(file)) {
+    ElMessage.error(`不支持的文件类型，支持的类型：${getSupportedTypesText()}`)
     return false
   }
+  
+  // 验证文件大小
+  if (!validateFileSize(file)) {
+    ElMessage.error(`文件大小不能超过 ${getMaxFileSizeText()}`)
+    return false
+  }
+  
   return true
 }
 

@@ -54,7 +54,7 @@
         -->
         
         <!-- 题库管理 - 功能开发中 -->
-        <!-- 
+
         <el-sub-menu index="question-bank">
           <template #title>
             <el-icon><Collection /></el-icon>
@@ -66,7 +66,7 @@
           <el-menu-item index="/atc-simulation">模拟通话</el-menu-item>
           <el-menu-item index="/oral-interview">口语能力面试</el-menu-item>
         </el-sub-menu>
-        -->
+
         
         <!-- 考试管理 - 功能开发中 -->
         <!-- 

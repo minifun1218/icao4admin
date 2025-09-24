@@ -54,6 +54,11 @@ export class AuthUtils {
     localStorage.removeItem(this.USER_INFO_KEY)
   }
   
+  // 清除token（兼容性方法）
+  static clearToken() {
+    this.clearAuth()
+  }
+  
   // 检查token是否过期
   static isTokenExpired(token) {
     if (!token) return true
