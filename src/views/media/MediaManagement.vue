@@ -1,223 +1,374 @@
 <template>
   <div class="media-management">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>媒体资源管理</span>
-          <div class="header-actions">
-            <el-upload
-              ref="uploadRef"
-              :show-file-list="false"
-              :before-upload="beforeUpload"
-              :on-progress="handleUploadProgress"
-              multiple
-              accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-              style="display: inline-block; margin-right: 10px;"
-            >
-              <el-button type="primary" :loading="uploading">
-                <el-icon><Upload /></el-icon>
-                {{ uploading ? '上传中...' : '上传文件' }}
-              </el-button>
-            </el-upload>
-            <el-button type="danger" @click="batchDelete" :disabled="!hasSelection">
-              <el-icon><Delete /></el-icon>
-              批量删除
-            </el-button>
-          </div>
-        </div>
-      </template>
-      
-      <!-- 搜索和过滤 -->
-      <div class="search-form">
-        <el-form :model="searchForm" inline>
-          <el-form-item label="文件名">
-            <el-input
-              v-model="searchForm.fileName"
-              placeholder="搜索文件名"
-              clearable
-              @clear="handleSearch"
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h2>媒体资源管理</h2>
+      <p>管理系统中的音频、图片、视频和文档资源</p>
+    </div>
+
+    <!-- 操作工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <el-button type="primary" @click="showUploadDialog">
+          <el-icon><Upload /></el-icon>
+          上传文件
+        </el-button>
+        <el-button 
+          type="danger" 
+          :disabled="selectedMedia.length === 0"
+          @click="handleBatchDelete"
+        >
+          <el-icon><Delete /></el-icon>
+          批量删除
+        </el-button>
+        <el-button @click="refreshList">
+          <el-icon><Refresh /></el-icon>
+          刷新
+        </el-button>
+      </div>
+      <div class="toolbar-right">
+        <el-select
+          v-model="filterType"
+          placeholder="选择类型"
+          clearable
+          style="width: 120px; margin-right: 12px"
+          @change="handleFilterChange"
+        >
+          <el-option label="全部" value="" />
+          <el-option label="音频" value="audio" />
+          <el-option label="图片" value="image" />
+          <el-option label="视频" value="video" />
+          <el-option label="文档" value="doc" />
+        </el-select>
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索文件名或转录内容..."
+          style="width: 250px"
+          clearable
+          @keyup.enter="handleSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-button type="primary" @click="handleSearch">搜索</el-button>
+        <el-button @click="showAdvancedSearch = !showAdvancedSearch">
+          高级搜索
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 高级搜索面板 -->
+    <el-collapse-transition>
+      <div v-show="showAdvancedSearch" class="advanced-search">
+        <el-form :model="advancedSearchForm" inline>
+          <el-form-item label="媒体类型">
+            <el-select v-model="advancedSearchForm.mediaType" placeholder="选择类型" clearable>
+              <el-option label="音频" value="audio" />
+              <el-option label="图片" value="image" />
+              <el-option label="视频" value="video" />
+              <el-option label="文档" value="doc" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="关键词">
+            <el-input v-model="advancedSearchForm.keyword" placeholder="输入关键词" />
+          </el-form-item>
+          <el-form-item label="有转录内容">
+            <el-select v-model="advancedSearchForm.hasTranscript" placeholder="选择" clearable>
+              <el-option label="是" :value="true" />
+              <el-option label="否" :value="false" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="时长范围">
+            <el-input-number 
+              v-model="advancedSearchForm.minDuration" 
+              :min="0" 
+              placeholder="最小时长(秒)"
+              style="width: 120px"
+            />
+            <span style="margin: 0 8px">-</span>
+            <el-input-number 
+              v-model="advancedSearchForm.maxDuration" 
+              :min="0" 
+              placeholder="最大时长(秒)"
+              style="width: 120px"
             />
           </el-form-item>
-          <el-form-item label="文件类型">
-            <el-select v-model="searchForm.category" placeholder="选择类型" clearable>
-              <el-option
-                v-for="category in mediaCategories"
-                :key="category.id"
-                :label="category.name"
-                :value="category.id"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="文件大小">
-            <el-select v-model="searchForm.sizeRange" placeholder="选择大小范围" clearable>
-              <el-option label="小于1MB" value="0-1" />
-              <el-option label="1MB-10MB" value="1-10" />
-              <el-option label="10MB-50MB" value="10-50" />
-              <el-option label="大于50MB" value="50-" />
-            </el-select>
+          <el-form-item label="创建时间">
+            <el-date-picker
+              v-model="advancedSearchForm.dateRange"
+              type="daterange"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+            />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSearch" :loading="loading">
-              <el-icon><Search /></el-icon>
-              搜索
-            </el-button>
-            <el-button @click="resetSearch">
-              <el-icon><Refresh /></el-icon>
-              重置
-            </el-button>
+            <el-button type="primary" @click="handleAdvancedSearch">搜索</el-button>
+            <el-button @click="resetAdvancedSearch">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
-      
-      <!-- 视图切换 -->
+    </el-collapse-transition>
+
+    <!-- 统计信息 -->
+    <div class="statistics">
+      <el-row :gutter="20">
+        <el-col :span="6">
+          <el-statistic title="总文件数" :value="statistics.totalCount || 0" />
+        </el-col>
+        <el-col :span="6">
+          <el-statistic title="音频文件" :value="statistics.audioCount || 0" />
+        </el-col>
+        <el-col :span="6">
+          <el-statistic title="图片文件" :value="statistics.imageCount || 0" />
+        </el-col>
+        <el-col :span="6">
+          <el-statistic title="视频文件" :value="statistics.videoCount || 0" />
+        </el-col>
+      </el-row>
+    </div>
+
+    <!-- 调试信息面板 -->
+    <div v-if="isDevelopment" class="debug-panel">
+      <el-collapse>
+        <el-collapse-item title="🔍 调试信息" name="debug">
+          <div class="debug-content">
+            <p><strong>媒体列表长度:</strong> {{ mediaList.length }}</p>
+            <p><strong>分页信息:</strong> 第{{ pagination.page }}页，共{{ pagination.total }}条</p>
+            <p><strong>加载状态:</strong> {{ loading ? '加载中' : '已完成' }}</p>
+            <p><strong>筛选类型:</strong> {{ filterType || '无' }}</p>
+            <div v-if="mediaList.length > 0">
+              <p><strong>第一个项目:</strong></p>
+              <pre class="debug-json">{{ JSON.stringify(mediaList[0], null, 2) }}</pre>
+            </div>
+            <div v-else>
+              <p><strong>⚠️ 媒体列表为空</strong></p>
+            </div>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
+    </div>
+
+    <!-- 媒体文件网格视图 -->
+    <div class="media-grid">
       <div class="view-controls">
         <el-radio-group v-model="viewMode" @change="handleViewModeChange">
-          <el-radio-button label="grid">
-            <el-icon><Grid /></el-icon>
-            网格视图
-          </el-radio-button>
-          <el-radio-button label="list">
-            <el-icon><List /></el-icon>
-            列表视图
-          </el-radio-button>
+          <el-radio-button label="grid">网格视图</el-radio-button>
+          <el-radio-button label="list">列表视图</el-radio-button>
         </el-radio-group>
-        
-        <div class="file-stats">
-          共 {{ pagination.total }} 个文件，总大小 {{ totalSize }}
-        </div>
       </div>
-      
+
       <!-- 网格视图 -->
       <div v-if="viewMode === 'grid'" class="grid-view">
-        <div class="media-grid">
-          <div
-            v-for="file in mediaList"
-            :key="file.id"
-            class="media-item"
-            :class="{ selected: selectedFiles.includes(file.id) }"
-            @click="toggleSelection(file.id)"
-          >
+        <!-- 空状态 -->
+        <div v-if="!loading && mediaList.length === 0" class="empty-state">
+          <el-empty description="暂无媒体文件">
+            <el-button type="primary" @click="showUploadDialog">
+              <el-icon><Upload /></el-icon>
+              上传第一个文件
+            </el-button>
+          </el-empty>
+        </div>
+        
+        <!-- 媒体卡片 -->
+        <div 
+          v-for="media in mediaList" 
+          :key="media.id" 
+          class="media-card"
+          :class="{ selected: selectedMedia.includes(media.id) }"
+          @click="handleCardClick(media)"
+        >
+          <div class="card-header">
+            <el-checkbox 
+              :model-value="selectedMedia.includes(media.id)"
+              @change="(checked) => handleSelectChange(media.id, checked)"
+              @click.stop
+            />
+            <el-dropdown @command="(command) => handleCardAction(command, media)" @click.stop>
+              <el-button type="text" size="small">
+                <el-icon><More /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="view">查看详情</el-dropdown-item>
+                  <el-dropdown-item command="download">下载</el-dropdown-item>
+                  <el-dropdown-item command="edit">编辑信息</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+          
+          <div class="card-content">
+            <!-- 媒体预览 -->
             <div class="media-preview">
-              <el-image
-                v-if="file.category === 'IMAGE'"
-                :src="getMediaUrl(file.id)"
-                :preview-src-list="[getMediaUrl(file.id)]"
-                fit="cover"
-                class="preview-image"
-                lazy
-              >
-                <template #error>
-                  <div class="image-error">
-                    <el-icon><Picture /></el-icon>
-                  </div>
-                </template>
-              </el-image>
+              <div v-if="media.isImage" class="image-preview">
+                <el-image 
+                  :src="getThumbnailUrl(media) || getPreviewUrl(media)" 
+                  fit="cover"
+                  lazy
+                  class="preview-image"
+                >
+                  <template #error>
+                    <div class="image-error">
+                      <el-icon><Picture /></el-icon>
+                    </div>
+                  </template>
+                </el-image>
+              </div>
               
-              <div v-else class="file-icon">
-                <el-icon size="40" :color="getFileIconColor(file.category)">
-                  <component :is="getFileIcon(file.category)" />
-                </el-icon>
+              <div v-else-if="media.isAudio" class="audio-preview">
+                <div class="media-icon">
+                  <el-icon size="48" :color="getMediaTypeColor(media)"><VideoPlay /></el-icon>
+                </div>
+                <audio v-if="media.previewUrl" :src="getPreviewUrl(media)" controls class="audio-player" />
+              </div>
+              
+              <div v-else-if="media.isVideo" class="video-preview">
+                <div class="media-icon">
+                  <el-icon size="48" :color="getMediaTypeColor(media)"><VideoCamera /></el-icon>
+                </div>
+                <video v-if="media.previewUrl" :src="getPreviewUrl(media)" controls class="video-player" />
+              </div>
+              
+              <div v-else class="doc-preview">
+                <div class="media-icon">
+                  <el-icon size="48" :color="getMediaTypeColor(media)"><Document /></el-icon>
+                </div>
               </div>
             </div>
             
-            <div class="media-info">
-              <div class="file-name" :title="file.fileName">{{ file.fileName }}</div>
-              <div class="file-meta">
-                <span class="file-size">{{ formatFileSize(file.fileSize) }}</span>
-                <span class="file-type">{{ getCategoryName(file.category) }}</span>
+            <!-- 文件信息 -->
+            <div class="file-info">
+              <div class="file-name" :title="media.filename || media.originalFilename">
+                {{ media.filename || media.originalFilename }}
               </div>
-              <div class="file-actions">
-                <el-button type="text" size="small" @click.stop="previewFile(file)">
-                  <el-icon><View /></el-icon>
-                </el-button>
-                <el-button type="text" size="small" @click.stop="downloadFile(file)">
-                  <el-icon><Download /></el-icon>
-                </el-button>
-                <el-button type="text" size="small" @click.stop="editFile(file)">
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-                <el-button type="text" size="small" @click.stop="deleteFile(file)" class="danger">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
+              <div class="file-meta">
+                <el-tag :type="getMediaTypeTagType(media.type)" size="small">
+                  {{ getMediaTypeLabel(media.type) }}
+                </el-tag>
+                <span v-if="media.duration || media.durationDescription" class="duration">
+                  {{ media.durationDescription || formatDuration(media.duration) }}
+                </span>
+              </div>
+              <div class="file-date">
+                {{ formatDateTime(media.createdAt) }}
               </div>
             </div>
           </div>
         </div>
       </div>
-      
+
       <!-- 列表视图 -->
-      <div v-else class="list-view">
+      <div v-if="viewMode === 'list'" class="list-view">
         <el-table
           v-loading="loading"
           :data="mediaList"
           @selection-change="handleSelectionChange"
+          @sort-change="handleSortChange"
           stripe
           border
         >
           <el-table-column type="selection" width="55" />
-          <el-table-column label="预览" width="80">
-            <template #default="{ row }">
-              <el-image
-                v-if="row.category === 'IMAGE'"
-                :src="getMediaUrl(row.id)"
-                :preview-src-list="[getMediaUrl(row.id)]"
-                fit="cover"
-                style="width: 50px; height: 50px; border-radius: 4px;"
-                lazy
-              />
-              <div v-else class="table-file-icon">
-                <el-icon :color="getFileIconColor(row.category)">
-                  <component :is="getFileIcon(row.category)" />
+          <el-table-column label="预览" width="80" align="center">
+            <template #default="scope">
+              <div class="table-preview">
+                <el-image
+                  v-if="scope.row.isImage"
+                  :src="getThumbnailUrl(scope.row) || getPreviewUrl(scope.row)"
+                  fit="cover"
+                  class="table-thumbnail"
+                  lazy
+                >
+                  <template #error>
+                    <el-icon><Picture /></el-icon>
+                  </template>
+                </el-image>
+                <el-icon v-else :color="getMediaTypeColor(scope.row)" size="24">
+                  <component :is="getMediaTypeIcon(scope.row)" />
                 </el-icon>
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="fileName" label="文件名" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="originalName" label="原始名称" min-width="150" show-overflow-tooltip />
-          <el-table-column label="类型" width="100">
-            <template #default="{ row }">
-              <el-tag :type="getCategoryType(row.category)" size="small">
-                {{ getCategoryName(row.category) }}
+          <el-table-column 
+            prop="filename" 
+            label="文件名" 
+            min-width="200"
+            show-overflow-tooltip
+          >
+            <template #default="scope">
+              {{ scope.row.filename || scope.row.originalFilename }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="type" label="类型" width="80">
+            <template #default="scope">
+              <el-tag :type="getMediaTypeTagType(scope.row.type)" size="small">
+                {{ getMediaTypeLabel(scope.row.type) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="fileSize" label="大小" width="100">
-            <template #default="{ row }">
-              {{ formatFileSize(row.fileSize) }}
+          <el-table-column prop="duration" label="时长" width="100">
+            <template #default="scope">
+              {{ scope.row.durationDescription || (scope.row.duration ? formatDuration(scope.row.duration) : '-') }}
             </template>
           </el-table-column>
-          <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
-          <el-table-column prop="tags" label="标签" width="120" show-overflow-tooltip />
-          <el-table-column label="上传时间" width="160">
-            <template #default="{ row }">
-              {{ formatDate(row.createdAt) }}
+          <el-table-column 
+            prop="description" 
+            label="描述" 
+            min-width="150"
+            show-overflow-tooltip
+          >
+            <template #default="scope">
+              {{ scope.row.description || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column 
+            prop="fileSizeDescription" 
+            label="文件大小" 
+            width="100"
+          >
+            <template #default="scope">
+              {{ scope.row.fileSizeDescription || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column 
+            prop="createdAt" 
+            label="创建时间" 
+            width="180"
+            sortable="custom"
+          >
+            <template #default="scope">
+              {{ formatDateTime(scope.row.createdAt) }}
             </template>
           </el-table-column>
           <el-table-column label="操作" width="200" fixed="right">
-            <template #default="{ row }">
-              <el-button type="primary" size="small" @click="previewFile(row)">
-                <el-icon><View /></el-icon>
-                预览
+            <template #default="scope">
+              <el-button type="primary" size="small" @click="handleView(scope.row)">
+                查看
               </el-button>
-              <el-button type="info" size="small" @click="downloadFile(row)">
-                <el-icon><Download /></el-icon>
-                下载
-              </el-button>
-              <el-button type="warning" size="small" @click="editFile(row)">
-                <el-icon><Edit /></el-icon>
+              <el-button size="small" @click="handleEdit(scope.row)">
                 编辑
               </el-button>
-              <el-button type="danger" size="small" @click="deleteFile(row)">
-                <el-icon><Delete /></el-icon>
+              <el-button size="small" @click="handleDownload(scope.row)">
+                下载
+              </el-button>
+              <el-button 
+                type="danger" 
+                size="small" 
+                @click="handleDelete(scope.row)"
+              >
                 删除
               </el-button>
             </template>
           </el-table-column>
         </el-table>
       </div>
-      
+
       <!-- 分页 -->
-      <div class="pagination-container">
+      <div class="pagination">
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.size"
@@ -225,121 +376,238 @@
           :page-sizes="[12, 24, 48, 96]"
           layout="total, sizes, prev, pager, next, jumper"
           @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
+          @current-change="handlePageChange"
         />
       </div>
-    </el-card>
-    
-    <!-- 编辑文件对话框 -->
+    </div>
+
+    <!-- 上传文件对话框 -->
+    <el-dialog v-model="uploadVisible" title="上传媒体文件" width="600px">
+      <el-upload
+        ref="uploadRef"
+        :auto-upload="false"
+        :on-change="handleFileChange"
+        :before-upload="beforeUpload"
+        :file-list="fileList"
+        multiple
+        drag
+        class="upload-demo"
+      >
+        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+        <div class="el-upload__text">
+          将文件拖到此处，或<em>点击上传</em>
+        </div>
+        <template #tip>
+          <div class="el-upload__tip">
+            支持音频、图片、视频、文档格式，单个文件不超过 100MB
+          </div>
+        </template>
+      </el-upload>
+      
+      <div class="upload-options">
+        <el-form :model="uploadForm" label-width="80px">
+          <el-form-item label="文件类型">
+            <el-select v-model="uploadForm.type" placeholder="自动检测">
+              <el-option label="自动检测" value="auto" />
+              <el-option label="音频" value="audio" />
+              <el-option label="图片" value="image" />
+              <el-option label="视频" value="video" />
+              <el-option label="文档" value="doc" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="标题">
+            <el-input v-model="uploadForm.title" placeholder="可选" />
+          </el-form-item>
+          <el-form-item label="描述">
+            <el-input 
+              v-model="uploadForm.description" 
+              type="textarea" 
+              :rows="2"
+              placeholder="可选"
+            />
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <template #footer>
+        <el-button @click="uploadVisible = false">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="handleUpload"
+          :loading="uploadLoading"
+        >
+          上传
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 媒体详情对话框 -->
     <el-dialog
-      v-model="editDialogVisible"
-      title="编辑文件信息"
-      width="600px"
+      v-model="detailVisible"
+      :title="currentMedia ? getFileName(currentMedia) : '媒体详情'"
+      width="800px"
+    >
+      <div v-if="currentMedia" class="media-detail">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <!-- 媒体预览 -->
+            <div class="detail-preview">
+              <div v-if="currentMedia.isImage" class="image-detail">
+                <el-image 
+                  :src="getPreviewUrl(currentMedia)" 
+                  fit="contain"
+                  class="detail-image"
+                >
+                  <template #error>
+                    <div class="image-error">
+                      <el-icon size="48"><Picture /></el-icon>
+                      <p>图片加载失败</p>
+                    </div>
+                  </template>
+                </el-image>
+              </div>
+              
+              <div v-else-if="currentMedia.isAudio" class="audio-detail">
+                <div class="media-icon-large">
+                  <el-icon size="64" :color="getMediaTypeColor(currentMedia)"><VideoPlay /></el-icon>
+                </div>
+                <audio 
+                  v-if="currentMedia.previewUrl" 
+                  :src="getPreviewUrl(currentMedia)" 
+                  controls 
+                  class="detail-audio"
+                />
+              </div>
+              
+              <div v-else-if="currentMedia.isVideo" class="video-detail">
+                <video 
+                  v-if="currentMedia.previewUrl" 
+                  :src="getPreviewUrl(currentMedia)" 
+                  controls 
+                  class="detail-video"
+                />
+              </div>
+              
+              <div v-else class="doc-detail">
+                <div class="media-icon-large">
+                  <el-icon size="64" :color="getMediaTypeColor(currentMedia)"><Document /></el-icon>
+                </div>
+                <p>{{ currentMedia.filename || currentMedia.originalFilename }}</p>
+              </div>
+            </div>
+          </el-col>
+          
+          <el-col :span="12">
+            <!-- 媒体信息 -->
+            <div class="detail-info">
+              <el-descriptions :column="1" border>
+                <el-descriptions-item label="文件名">
+                  {{ currentMedia.filename || currentMedia.originalFilename }}
+                </el-descriptions-item>
+                <el-descriptions-item label="类型">
+                  <el-tag :type="getMediaTypeTagType(currentMedia.type)">
+                    {{ getMediaTypeLabel(currentMedia.type) }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="文件大小">
+                  {{ currentMedia.fileSizeDescription || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="时长" v-if="currentMedia.duration || currentMedia.durationDescription">
+                  {{ currentMedia.durationDescription || formatDuration(currentMedia.duration) }}
+                </el-descriptions-item>
+                <el-descriptions-item label="质量">
+                  {{ currentMedia.quality || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="来源">
+                  {{ currentMedia.source || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="创建时间">
+                  {{ formatDateTime(currentMedia.createdAt) }}
+                </el-descriptions-item>
+                <el-descriptions-item label="文件路径">
+                  {{ currentMedia.filePath }}
+                </el-descriptions-item>
+              </el-descriptions>
+              
+              <!-- 描述 -->
+              <div v-if="currentMedia.description" class="description-section">
+                <h4>描述</h4>
+                <div class="description-content">
+                  {{ currentMedia.description }}
+                </div>
+              </div>
+              
+              <!-- 标签 -->
+              <div v-if="currentMedia.tags" class="tags-section">
+                <h4>标签</h4>
+                <div class="tags-content">
+                  <el-tag v-for="tag in currentMedia.tags" :key="tag" style="margin-right: 8px;">
+                    {{ tag }}
+                  </el-tag>
+                </div>
+              </div>
+              
+              <!-- 元数据 -->
+              <div v-if="currentMedia.metadata" class="metadata-section">
+                <h4>元数据</h4>
+                <pre class="metadata-content">{{ formatMetadata(currentMedia.metadata) }}</pre>
+              </div>
+            </div>
+          </el-col>
+        </el-row>
+      </div>
+      
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button type="primary" @click="handleDownload(currentMedia)">
+          下载文件
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑媒体信息对话框 -->
+    <el-dialog
+      v-model="editVisible"
+      title="编辑媒体信息"
+      width="500px"
     >
       <el-form
         ref="editFormRef"
         :model="editForm"
-        :rules="editRules"
         label-width="100px"
       >
-        <el-form-item label="文件名" prop="fileName">
-          <el-input v-model="editForm.fileName" placeholder="请输入文件名" />
+        <el-form-item label="标题">
+          <el-input
+            v-model="editForm.title"
+            placeholder="输入文件标题"
+          />
         </el-form-item>
-        <el-form-item label="描述" prop="description">
+        <el-form-item label="描述">
           <el-input
             v-model="editForm.description"
             type="textarea"
             :rows="3"
-            placeholder="请输入文件描述"
+            placeholder="输入文件描述"
           />
         </el-form-item>
-        <el-form-item label="分类" prop="category">
-          <el-select v-model="editForm.category" placeholder="选择分类">
-            <el-option
-              v-for="category in mediaCategories"
-              :key="category.id"
-              :label="category.name"
-              :value="category.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="标签" prop="tags">
-          <el-input v-model="editForm.tags" placeholder="多个标签用逗号分隔" />
+        <el-form-item label="标签">
+          <el-input
+            v-model="editForm.tagsText"
+            placeholder="输入标签，用逗号分隔"
+          />
         </el-form-item>
       </el-form>
       
       <template #footer>
-        <el-button @click="editDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveFile" :loading="saving">
-          确定
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="handleSaveEdit"
+          :loading="editLoading"
+        >
+          保存
         </el-button>
       </template>
-    </el-dialog>
-    
-    <!-- 文件预览对话框 -->
-    <el-dialog
-      v-model="previewDialogVisible"
-      :title="currentFile?.fileName"
-      width="80%"
-      top="5vh"
-    >
-      <div class="file-preview">
-        <!-- 图片预览 -->
-        <el-image
-          v-if="currentFile?.category === 'IMAGE'"
-          :src="getMediaUrl(currentFile.id)"
-          fit="contain"
-          style="width: 100%; max-height: 70vh;"
-        />
-        
-        <!-- 音频预览 -->
-        <audio
-          v-else-if="currentFile?.category === 'AUDIO'"
-          :src="getMediaUrl(currentFile.id)"
-          controls
-          style="width: 100%;"
-        />
-        
-        <!-- 视频预览 -->
-        <video
-          v-else-if="currentFile?.category === 'VIDEO'"
-          :src="getMediaUrl(currentFile.id)"
-          controls
-          style="width: 100%; max-height: 70vh;"
-        />
-        
-        <!-- 其他文件 -->
-        <div v-else class="unsupported-preview">
-          <el-icon size="60" color="#dcdfe6">
-            <component :is="getFileIcon(currentFile?.category)" />
-          </el-icon>
-          <p>此文件类型不支持预览</p>
-          <el-button type="primary" @click="downloadFile(currentFile)">
-            <el-icon><Download /></el-icon>
-            下载文件
-          </el-button>
-        </div>
-      </div>
-    </el-dialog>
-    
-    <!-- 上传进度对话框 -->
-    <el-dialog
-      v-model="uploadProgressVisible"
-      title="文件上传"
-      width="500px"
-      :close-on-click-modal="false"
-      :close-on-press-escape="false"
-    >
-      <div class="upload-progress">
-        <div class="upload-file-info">
-          <span>{{ currentUploadFile?.name }}</span>
-          <span>{{ formatFileSize(currentUploadFile?.size) }}</span>
-        </div>
-        <el-progress :percentage="uploadProgress" :status="uploadStatus" />
-        <div class="upload-speed">
-          上传速度: {{ uploadSpeed }}
-        </div>
-      </div>
     </el-dialog>
   </div>
 </template>
@@ -347,458 +615,663 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { mediaApi } from '@/api/media'
 import {
-  Search,
-  Refresh,
   Upload,
   Delete,
-  Edit,
-  View,
-  Download,
-  Grid,
-  List,
+  Refresh,
+  Search,
+  More,
   Picture,
   VideoPlay,
-  Headset,
+  VideoCamera,
   Document,
-  Folder
+  UploadFilled
 } from '@element-plus/icons-vue'
+import {
+  getMediaList,
+  getMediaById,
+  deleteMedia,
+  deleteMediaBatch,
+  uploadMediaFile,
+  searchMedia,
+  getMediaStats,
+  advancedSearchMedia,
+  updateMediaInfo,
+  getPreviewUrl,
+  getDownloadUrl,
+  getThumbnailUrl,
+  formatDuration,
+  getMediaTypeIcon,
+  getMediaTypeColor
+} from '@/api/media'
 
 // 响应式数据
 const loading = ref(false)
-const saving = ref(false)
-const uploading = ref(false)
-const editDialogVisible = ref(false)
-const previewDialogVisible = ref(false)
-const uploadProgressVisible = ref(false)
-const editFormRef = ref(null)
-const uploadRef = ref(null)
+const uploadLoading = ref(false)
+const editLoading = ref(false)
+const uploadVisible = ref(false)
+const detailVisible = ref(false)
+const editVisible = ref(false)
+const showAdvancedSearch = ref(false)
 
 const mediaList = ref([])
-const selectedFiles = ref([])
-const currentFile = ref(null)
-const currentUploadFile = ref(null)
-const uploadProgress = ref(0)
-const uploadStatus = ref('')
-const uploadSpeed = ref('0 KB/s')
+const selectedMedia = ref([])
+const statistics = ref({})
+const currentMedia = ref(null)
 
-const viewMode = ref('grid') // 'grid' | 'list'
+// 视图模式
+const viewMode = ref('grid')
 
-// 媒体分类
-const mediaCategories = mediaApi.getMediaCategories()
+// 搜索和筛选
+const searchKeyword = ref('')
+const filterType = ref('')
 
-// 搜索表单
-const searchForm = reactive({
-  fileName: '',
-  category: '',
-  sizeRange: ''
-})
-
-// 分页信息
+// 分页
 const pagination = reactive({
   page: 1,
   size: 24,
   total: 0
 })
 
+// 高级搜索表单
+const advancedSearchForm = reactive({
+  mediaType: '',
+  keyword: '',
+  hasTranscript: null,
+  minDuration: null,
+  maxDuration: null,
+  dateRange: []
+})
+
+// 上传表单
+const uploadForm = reactive({
+  type: 'auto',
+  title: '',
+  description: ''
+})
+
+const fileList = ref([])
+
 // 编辑表单
 const editForm = reactive({
-  id: null,
-  fileName: '',
+  title: '',
   description: '',
-  category: '',
-  tags: ''
+  tagsText: ''
 })
-
-// 表单验证规则
-const editRules = {
-  fileName: [
-    { required: true, message: '请输入文件名', trigger: 'blur' }
-  ]
-}
 
 // 计算属性
-const hasSelection = computed(() => selectedFiles.value.length > 0)
-
-const totalSize = computed(() => {
-  const total = mediaList.value.reduce((sum, file) => sum + (file.fileSize || 0), 0)
-  return formatFileSize(total)
+const formatDateTime = computed(() => {
+  return (dateTime) => {
+    if (!dateTime) return '-'
+    return new Date(dateTime).toLocaleString('zh-CN')
+  }
 })
 
-// 获取媒体文件URL
-const getMediaUrl = (id) => {
-  return mediaApi.getMediaUrl(id)
-}
+// 开发环境判断
+const isDevelopment = computed(() => {
+  return import.meta.env.DEV
+})
 
-// 获取文件图标
-const getFileIcon = (category) => {
-  const icons = {
-    IMAGE: Picture,
-    AUDIO: Headset,
-    VIDEO: VideoPlay,
-    DOCUMENT: Document,
-    OTHER: Folder
-  }
-  return icons[category] || Folder
-}
-
-// 获取文件图标颜色
-const getFileIconColor = (category) => {
-  const colors = {
-    IMAGE: '#67c23a',
-    AUDIO: '#e6a23c',
-    VIDEO: '#409eff',
-    DOCUMENT: '#f56c6c',
-    OTHER: '#909399'
-  }
-  return colors[category] || '#909399'
-}
-
-// 获取分类名称
-const getCategoryName = (category) => {
-  const categoryItem = mediaCategories.find(c => c.id === category)
-  return categoryItem?.name || '其他'
-}
-
-// 获取分类标签类型
-const getCategoryType = (category) => {
-  const types = {
-    IMAGE: 'success',
-    AUDIO: 'warning',
-    VIDEO: 'primary',
-    DOCUMENT: 'danger',
-    OTHER: 'info'
-  }
-  return types[category] || 'info'
-}
-
-// 格式化文件大小
-const formatFileSize = (bytes) => {
-  return mediaApi.formatFileSize(bytes)
-}
-
-// 加载媒体文件列表
-const loadMediaFiles = async () => {
+// 方法
+const loadMediaList = async () => {
   try {
     loading.value = true
-    
     const params = {
       page: pagination.page - 1,
-      size: pagination.size,
-      sort: 'createdAt,desc',
-      ...searchForm
+      size: pagination.size
     }
     
-    const response = await mediaApi.getMediaFiles(params)
+    if (filterType.value) {
+      params.type = filterType.value
+    }
     
-    mediaList.value = response.content || []
-    pagination.total = response.totalElements || 0
+    console.log('📡 发送媒体列表请求，参数:', params)
+    const response = await getMediaList(params)
+    console.log('📦 收到媒体列表响应:', response)
+    console.log('🔍 响应数据详情:', response.data)
+    
+    if (response && response.data) {
+      // 检查多种可能的数据结构
+      let mediaData = []
+      let totalCount = 0
+      
+      if (response.data.data) {
+        // 格式: { data: { content: [...], totalElements: ... } }
+        console.log('📊 检测到嵌套data结构')
+        mediaData = response.data.data.content || []
+        totalCount = response.data.data.totalElements || 0
+      } else if (response.data.content) {
+        // 格式: { content: [...], totalElements: ... }
+        console.log('📊 检测到直接content结构')
+        mediaData = response.data.content || []
+        totalCount = response.data.totalElements || 0
+      } else if (Array.isArray(response.data)) {
+        // 格式: [...] 直接数组
+        console.log('📊 检测到直接数组结构')
+        mediaData = response.data
+        totalCount = response.data.length
+      } else {
+        console.log('📊 未知数据结构，尝试解析')
+        console.log('📊 响应数据键:', Object.keys(response.data))
+        mediaData = response.data.content || response.data.data?.content || []
+        totalCount = response.data.totalElements || response.data.data?.totalElements || 0
+      }
+      
+      console.log('✅ 解析后的数据结构:', {
+        mediaDataLength: mediaData.length,
+        totalCount: totalCount,
+        firstItem: mediaData[0],
+        dataKeys: mediaData[0] ? Object.keys(mediaData[0]) : []
+      })
+      
+      mediaList.value = mediaData
+      pagination.total = totalCount
+      
+      console.log('📋 设置媒体列表:', mediaList.value.length, '个项目')
+    } else {
+      console.warn('⚠️ 响应数据格式异常:', response)
+      ElMessage.warning('响应数据格式异常')
+    }
   } catch (error) {
-    ElMessage.error('加载媒体文件失败')
+    ElMessage.error('加载媒体列表失败')
+    console.error('❌ 加载媒体列表错误:', error)
   } finally {
     loading.value = false
   }
 }
 
-// 搜索处理
-const handleSearch = () => {
-  pagination.page = 1
-  loadMediaFiles()
+const loadStatistics = async () => {
+  try {
+    const response = await getMediaStats()
+    if (response.data) {
+      statistics.value = response.data
+    }
+  } catch (error) {
+    console.error('加载统计信息失败:', error)
+  }
 }
 
-// 重置搜索
-const resetSearch = () => {
-  Object.assign(searchForm, {
-    fileName: '',
-    category: '',
-    sizeRange: ''
+const refreshList = () => {
+  loadMediaList()
+  loadStatistics()
+}
+
+const handleFilterChange = () => {
+  pagination.page = 1
+  loadMediaList()
+}
+
+const handleSearch = async () => {
+  if (!searchKeyword.value.trim()) {
+    loadMediaList()
+    return
+  }
+  
+  try {
+    loading.value = true
+    const response = await searchMedia(searchKeyword.value)
+    if (response.data) {
+      mediaList.value = response.data
+      pagination.total = response.data.length
+    }
+  } catch (error) {
+    ElMessage.error('搜索失败')
+    console.error(error)
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleAdvancedSearch = async () => {
+  try {
+    loading.value = true
+    const searchParams = {
+      ...advancedSearchForm,
+      page: 0,
+      size: pagination.size
+    }
+    
+    if (advancedSearchForm.dateRange && advancedSearchForm.dateRange.length === 2) {
+      searchParams.startDate = advancedSearchForm.dateRange[0]
+      searchParams.endDate = advancedSearchForm.dateRange[1]
+    }
+    
+    const response = await advancedSearchMedia(searchParams)
+    if (response.data) {
+      mediaList.value = response.data.content || []
+      pagination.total = response.data.totalElements || 0
+      pagination.page = 1
+    }
+  } catch (error) {
+    ElMessage.error('高级搜索失败')
+    console.error(error)
+  } finally {
+    loading.value = false
+  }
+}
+
+const resetAdvancedSearch = () => {
+  Object.assign(advancedSearchForm, {
+    mediaType: '',
+    keyword: '',
+    hasTranscript: null,
+    minDuration: null,
+    maxDuration: null,
+    dateRange: []
   })
-  handleSearch()
 }
 
-// 分页处理
-const handleSizeChange = (size) => {
-  pagination.size = size
-  pagination.page = 1
-  loadMediaFiles()
-}
-
-const handleCurrentChange = (page) => {
-  pagination.page = page
-  loadMediaFiles()
-}
-
-// 视图模式切换
 const handleViewModeChange = () => {
-  selectedFiles.value = []
-  // 调整分页大小
+  // 网格视图和列表视图切换时可能需要调整分页大小
   if (viewMode.value === 'grid') {
     pagination.size = 24
   } else {
     pagination.size = 20
   }
   pagination.page = 1
-  loadMediaFiles()
+  loadMediaList()
 }
 
-// 选择处理（网格视图）
-const toggleSelection = (fileId) => {
-  const index = selectedFiles.value.indexOf(fileId)
-  if (index > -1) {
-    selectedFiles.value.splice(index, 1)
+const handleCardClick = (media) => {
+  handleView(media)
+}
+
+const handleSelectChange = (mediaId, checked) => {
+  if (checked) {
+    if (!selectedMedia.value.includes(mediaId)) {
+      selectedMedia.value.push(mediaId)
+    }
   } else {
-    selectedFiles.value.push(fileId)
+    const index = selectedMedia.value.indexOf(mediaId)
+    if (index > -1) {
+      selectedMedia.value.splice(index, 1)
+    }
   }
 }
 
-// 选择处理（列表视图）
 const handleSelectionChange = (selection) => {
-  selectedFiles.value = selection.map(file => file.id)
+  selectedMedia.value = selection.map(item => item.id)
 }
 
-// 文件上传前处理
+const handleCardAction = (command, media) => {
+  switch (command) {
+    case 'view':
+      handleView(media)
+      break
+    case 'download':
+      handleDownload(media)
+      break
+    case 'edit':
+      handleEdit(media)
+      break
+    case 'delete':
+      handleDelete(media)
+      break
+  }
+}
+
+const handleView = (media) => {
+  currentMedia.value = media
+  detailVisible.value = true
+}
+
+const handleEdit = (media) => {
+  currentMedia.value = media
+  editForm.title = media.title || ''
+  editForm.description = media.description || ''
+  editForm.tagsText = media.tags ? media.tags.join(', ') : ''
+  editVisible.value = true
+}
+
+const handleDownload = (media) => {
+  const downloadUrl = getDownloadUrl(media)
+  if (downloadUrl) {
+    window.open(downloadUrl, '_blank')
+  } else {
+    ElMessage.error('无法获取下载链接')
+  }
+}
+
+const handleDelete = async (media) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除文件"${media.filename || media.originalFilename}"吗？`,
+      '确认删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    await deleteMedia(media.id)
+    ElMessage.success('删除成功')
+    refreshList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+      console.error(error)
+    }
+  }
+}
+
+const handleBatchDelete = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedMedia.value.length} 个文件吗？`,
+      '确认批量删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    await deleteMediaBatch(selectedMedia.value)
+    ElMessage.success('批量删除成功')
+    selectedMedia.value = []
+    refreshList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量删除失败')
+      console.error(error)
+    }
+  }
+}
+
+const handleSortChange = ({ prop, order }) => {
+  // 处理排序逻辑
+  console.log('排序:', prop, order)
+  loadMediaList()
+}
+
+const handleSizeChange = (size) => {
+  pagination.size = size
+  pagination.page = 1
+  loadMediaList()
+}
+
+const handlePageChange = (page) => {
+  pagination.page = page
+  loadMediaList()
+}
+
+const showUploadDialog = () => {
+  uploadVisible.value = true
+  fileList.value = []
+  Object.assign(uploadForm, {
+    type: 'auto',
+    title: '',
+    description: ''
+  })
+}
+
+const handleFileChange = (file) => {
+  // 文件选择处理
+}
+
 const beforeUpload = (file) => {
-  // 验证文件大小（50MB限制）
-  const maxSize = 50 * 1024 * 1024
-  if (!mediaApi.validateFileSize(file, maxSize)) {
-    ElMessage.error('文件大小不能超过50MB')
+  const isValidSize = file.size / 1024 / 1024 < 100
+  
+  if (!isValidSize) {
+    ElMessage.error('文件大小不能超过 100MB')
     return false
   }
-  
-  currentUploadFile.value = file
-  uploading.value = true
-  uploadProgressVisible.value = true
-  uploadProgress.value = 0
-  uploadStatus.value = ''
-  
   return true
 }
 
-// 上传进度处理
-const handleUploadProgress = (progressEvent) => {
-  const { loaded, total } = progressEvent
-  uploadProgress.value = Math.round((loaded / total) * 100)
-  
-  // 计算上传速度
-  const speed = loaded / (Date.now() - uploadStartTime) * 1000
-  uploadSpeed.value = formatFileSize(speed) + '/s'
-}
-
-let uploadStartTime = 0
-
-// 文件上传
-const handleFileUpload = async (file) => {
-  try {
-    uploadStartTime = Date.now()
-    
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('description', `上传的${getCategoryName(mediaApi.getFileType(file.name))}文件`)
-    formData.append('category', mediaApi.getFileType(file.name))
-    
-    await mediaApi.uploadMedia(formData, {
-      onUploadProgress: handleUploadProgress
-    })
-    
-    uploadStatus.value = 'success'
-    ElMessage.success('文件上传成功')
-    
-    setTimeout(() => {
-      uploadProgressVisible.value = false
-      uploading.value = false
-      loadMediaFiles()
-    }, 1000)
-  } catch (error) {
-    uploadStatus.value = 'exception'
-    ElMessage.error('文件上传失败')
-    uploading.value = false
-    uploadProgressVisible.value = false
-  }
-}
-
-// 编辑文件
-const editFile = (file) => {
-  Object.assign(editForm, {
-    id: file.id,
-    fileName: file.fileName,
-    description: file.description || '',
-    category: file.category,
-    tags: file.tags || ''
-  })
-  editDialogVisible.value = true
-}
-
-// 保存文件信息
-const saveFile = async () => {
-  if (!editFormRef.value) return
-  
-  try {
-    await editFormRef.value.validate()
-    saving.value = true
-    
-    await mediaApi.updateMedia(editForm.id, editForm)
-    
-    ElMessage.success('文件信息更新成功')
-    editDialogVisible.value = false
-    loadMediaFiles()
-  } catch (error) {
-    if (error !== false) {
-      ElMessage.error('保存失败')
-    }
-  } finally {
-    saving.value = false
-  }
-}
-
-// 预览文件
-const previewFile = (file) => {
-  currentFile.value = file
-  previewDialogVisible.value = true
-}
-
-// 下载文件
-const downloadFile = async (file) => {
-  try {
-    await mediaApi.downloadMedia(file.id, file.originalName || file.fileName)
-    ElMessage.success('文件下载成功')
-  } catch (error) {
-    ElMessage.error('文件下载失败')
-  }
-}
-
-// 删除文件
-const deleteFile = (file) => {
-  ElMessageBox.confirm(
-    `确定要删除文件 "${file.fileName}" 吗？此操作不可恢复。`,
-    '确认删除',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(async () => {
-    try {
-      await mediaApi.deleteMedia(file.id)
-      ElMessage.success('删除成功')
-      loadMediaFiles()
-    } catch (error) {
-      ElMessage.error('删除失败')
-    }
-  })
-}
-
-// 批量删除
-const batchDelete = () => {
-  if (selectedFiles.value.length === 0) {
-    ElMessage.warning('请选择要删除的文件')
+const handleUpload = async () => {
+  if (fileList.value.length === 0) {
+    ElMessage.warning('请选择要上传的文件')
     return
   }
   
-  ElMessageBox.confirm(
-    `确定要删除选中的 ${selectedFiles.value.length} 个文件吗？此操作不可恢复。`,
-    '确认批量删除',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
+  try {
+    uploadLoading.value = true
+    
+    for (const file of fileList.value) {
+      const formData = new FormData()
+      formData.append('file', file.raw)
+      formData.append('type', uploadForm.type)
+      
+      if (uploadForm.title) {
+        formData.append('title', uploadForm.title)
+      }
+      
+      if (uploadForm.description) {
+        formData.append('description', uploadForm.description)
+      }
+      
+      await uploadMediaFile(formData)
     }
-  ).then(async () => {
-    try {
-      await mediaApi.batchDeleteMedia(selectedFiles.value)
-      ElMessage.success('批量删除成功')
-      selectedFiles.value = []
-      loadMediaFiles()
-    } catch (error) {
-      ElMessage.error('批量删除失败')
-    }
-  })
+    
+    ElMessage.success('上传成功')
+    uploadVisible.value = false
+    refreshList()
+  } catch (error) {
+    ElMessage.error('上传失败')
+    console.error(error)
+  } finally {
+    uploadLoading.value = false
+  }
 }
 
-// 格式化日期
-const formatDate = (date) => {
-  if (!date) return '-'
-  return new Date(date).toLocaleDateString('zh-CN')
+const handleSaveEdit = async () => {
+  try {
+    editLoading.value = true
+    
+    const updateData = {
+      title: editForm.title,
+      description: editForm.description,
+      tags: editForm.tagsText ? editForm.tagsText.split(',').map(tag => tag.trim()).filter(tag => tag) : null
+    }
+    
+    await updateMediaInfo(currentMedia.value.id, updateData)
+    ElMessage.success('更新成功')
+    editVisible.value = false
+    refreshList()
+  } catch (error) {
+    ElMessage.error('更新失败')
+    console.error(error)
+  } finally {
+    editLoading.value = false
+  }
 }
 
+// 辅助方法
+const getFileName = (media) => {
+  if (!media) return '未知文件'
+  return media.filename || media.originalFilename || '未知文件'
+}
+
+const getMediaTypeLabel = (type) => {
+  const labels = {
+    audio: '音频',
+    image: '图片', 
+    video: '视频',
+    doc: '文档'
+  }
+  return labels[type] || '未知'
+}
+
+const getMediaTypeTagType = (type) => {
+  const types = {
+    audio: 'success',
+    image: 'primary',
+    video: 'warning',
+    doc: 'info'
+  }
+  return types[type] || 'info'
+}
+
+const formatMetadata = (jsonString) => {
+  try {
+    return JSON.stringify(JSON.parse(jsonString), null, 2)
+  } catch {
+    return jsonString
+  }
+}
+
+// 生命周期
 onMounted(() => {
-  loadMediaFiles()
+  loadMediaList()
+  loadStatistics()
 })
+
+// 模板引用
+const uploadRef = ref(null)
+const editFormRef = ref(null)
 </script>
 
 <style scoped>
 .media-management {
-  padding: 0;
+  padding: 20px;
+}
+
+.page-header {
+  margin-bottom: 20px;
+}
+
+.page-header h2 {
+  margin: 0 0 8px 0;
+  color: #303133;
+}
+
+.page-header p {
+  margin: 0;
+  color: #909399;
+  font-size: 14px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.toolbar-left {
+  display: flex;
+  gap: 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.advanced-search {
+  margin-bottom: 20px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.statistics {
+  margin-bottom: 20px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 调试面板样式 */
+.debug-panel {
+  margin-bottom: 20px;
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+}
+
+.debug-content {
+  padding: 16px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.debug-json {
+  background: #f8f9fa;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+  font-size: 11px;
+  overflow-x: auto;
+  max-height: 200px;
+}
+
+/* 空状态样式 */
+.empty-state {
+  grid-column: 1 / -1;
+  padding: 40px;
+  text-align: center;
+}
+
+.media-grid {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+}
+
+.view-controls {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 网格视图样式 */
+.grid-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.media-card {
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.media-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.media-card.selected {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 12px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
 }
 
-.header-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.search-form {
-  margin-bottom: 20px;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-}
-
-.view-controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding: 0 20px;
-}
-
-.file-stats {
-  color: #606266;
-  font-size: 14px;
-}
-
-.grid-view {
-  min-height: 400px;
-}
-
-.media-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px;
-  padding: 20px;
-}
-
-.media-item {
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: all 0.3s;
-  background: white;
-}
-
-.media-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
-}
-
-.media-item.selected {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+.card-content {
+  padding: 16px;
 }
 
 .media-preview {
-  height: 150px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #f8f9fa;
+  margin-bottom: 12px;
+}
+
+.image-preview {
+  width: 100%;
+  height: 160px;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 .preview-image {
@@ -810,25 +1283,37 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
   height: 100%;
-  color: #c0c4cc;
+  background: #f5f5f5;
+  color: #909399;
 }
 
-.file-icon {
+.audio-preview,
+.video-preview,
+.doc-preview {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
+  padding: 20px;
 }
 
-.media-info {
-  padding: 12px;
+.media-icon {
+  margin-bottom: 12px;
+}
+
+.audio-player,
+.video-player {
+  width: 100%;
+  max-height: 120px;
+}
+
+.file-info {
+  text-align: center;
 }
 
 .file-name {
   font-weight: 500;
+  color: #303133;
   margin-bottom: 8px;
   white-space: nowrap;
   overflow: hidden;
@@ -837,99 +1322,137 @@ onMounted(() => {
 
 .file-meta {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.duration {
   font-size: 12px;
   color: #909399;
-  margin-bottom: 8px;
 }
 
-.file-actions {
-  display: flex;
-  justify-content: space-around;
+.file-date {
+  font-size: 12px;
+  color: #c0c4cc;
 }
 
-.file-actions .el-button {
-  padding: 4px;
-}
-
-.file-actions .danger {
-  color: #f56c6c;
-}
-
-.table-file-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 50px;
-  height: 50px;
-  border-radius: 4px;
-  background-color: #f8f9fa;
-}
-
-.pagination-container {
-  margin-top: 20px;
-  text-align: center;
-}
-
-.file-preview {
-  text-align: center;
-}
-
-.unsupported-preview {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
-  color: #909399;
-}
-
-.unsupported-preview p {
-  margin: 20px 0;
-  font-size: 16px;
-}
-
-.upload-progress {
-  text-align: center;
-}
-
-.upload-file-info {
-  display: flex;
-  justify-content: space-between;
+/* 列表视图样式 */
+.list-view {
   margin-bottom: 20px;
-  font-size: 14px;
-  color: #606266;
 }
 
-.upload-speed {
-  margin-top: 10px;
+.table-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.table-thumbnail {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+}
+
+/* 分页样式 */
+.pagination {
+  padding: 20px;
+  text-align: center;
+  border-top: 1px solid #e9ecef;
+}
+
+/* 对话框样式 */
+.upload-demo {
+  margin-bottom: 20px;
+}
+
+.upload-options {
+  margin-top: 20px;
+}
+
+.media-detail {
+  min-height: 400px;
+}
+
+.detail-preview {
+  text-align: center;
+}
+
+.detail-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+}
+
+.media-icon-large {
+  margin-bottom: 16px;
+}
+
+.detail-audio,
+.detail-video {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.detail-info {
+  height: 100%;
+}
+
+.description-section,
+.tags-section,
+.metadata-section {
+  margin-top: 20px;
+}
+
+.description-section h4,
+.tags-section h4,
+.metadata-section h4 {
+  margin: 0 0 8px 0;
+  color: #303133;
+}
+
+.description-content {
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+  line-height: 1.6;
+}
+
+.tags-content {
+  padding: 8px 0;
+}
+
+.metadata-content {
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
   font-size: 12px;
-  color: #909399;
+  overflow-x: auto;
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .media-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 15px;
-    padding: 15px;
-  }
-  
-  .header-actions {
+  .toolbar {
     flex-direction: column;
-    gap: 5px;
+    gap: 16px;
+    align-items: stretch;
   }
-  
-  .view-controls {
+
+  .toolbar-left,
+  .toolbar-right {
+    justify-content: center;
+  }
+
+  .grid-view {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+
+  .advanced-search .el-form {
     flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
-  }
-  
-  .search-form .el-form--inline .el-form-item {
-    display: block;
-    margin-right: 0;
-    margin-bottom: 10px;
   }
 }
 </style>

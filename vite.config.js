@@ -17,11 +17,25 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+    hmr: {
+      overlay: false // 禁用错误遮罩，避免扩展错误干扰
+    },
     proxy: {
+      // API 接口代理
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/api')
+      }
+    }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['vue', 'vue-router', 'pinia'],
+          elementPlus: ['element-plus']
+        }
       }
     }
   }

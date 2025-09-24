@@ -1,4 +1,62 @@
+import axios from 'axios'
 import { AuthUtils } from './auth'
+
+// 创建axios实例
+const request = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest'
+  }
+})
+
+// 请求拦截器
+request.interceptors.request.use(
+  (config) => {
+    const token = AuthUtils.getToken()
+    if (token) {
+      config.headers.Authorization = AuthUtils.formatAuthHeader(token)
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// 响应拦截器
+request.interceptors.response.use(
+  (response) => {
+    return response
+  },
+  (error) => {
+    if (error.response) {
+      const { status, data } = error.response
+      const message = data?.message || `请求失败 (${status})`
+      
+      // 401 未授权，跳转到登录页
+      if (status === 401) {
+        AuthUtils.clearToken()
+        window.location.href = '/login'
+        return Promise.reject(new Error('登录已过期，请重新登录'))
+      }
+      
+      const apiError = new Error(message)
+      apiError.status = status
+      apiError.code = data?.code
+      apiError.details = data?.details
+      
+      return Promise.reject(apiError)
+    }
+    
+    return Promise.reject(new Error(error.message || '网络连接失败'))
+  }
+)
+
+// 导出axios实例作为默认导出
+export default request
 
 // 请求配置工具类
 export class RequestUtils {
@@ -164,9 +222,9 @@ export const createApiMethod = (method, url, options = {}) => {
     try {
       let response
       if (method.toLowerCase() === 'get') {
-        response = await api[method](url, { ...finalConfig, params: data })
+        response = await request[method](url, { ...finalConfig, params: data })
       } else {
-        response = await api[method](url, data, finalConfig)
+        response = await request[method](url, data, finalConfig)
       }
       
       return RequestUtils.handleResponse(response)

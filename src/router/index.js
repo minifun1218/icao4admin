@@ -35,33 +35,27 @@ const router = createRouter({
         },
         {
           path: '/vocabs',
-          name: 'VocabManagement',
-          component: () => import('@/views/vocab/VocabManagement.vue'),
+          name: 'VocabularyManagement',
+          component: () => import('@/views/vocab/VocabularyManagement.vue'),
           meta: { title: '词汇管理' }
         },
         {
+          path: '/vocab-types',
+          name: 'VocabularyTypeManagement',
+          component: () => import('@/views/vocab/VocabularyTypeManagement.vue'),
+          meta: { title: '词汇类型管理' }
+        },
+        {
           path: '/terms',
-          name: 'TermManagement',
-          component: () => import('@/views/term/TermManagement.vue'),
+          name: 'TerminologyManagement',
+          component: () => import('@/views/term/TerminologyManagement.vue'),
           meta: { title: '术语管理' }
         },
         {
-          path: '/banners',
-          name: 'BannerManagement',
-          component: () => import('@/views/banner/BannerManagement.vue'),
-          meta: { title: '轮播图管理' }
-        },
-        {
-          path: '/question-bank',
-          name: 'QuestionBankManagement',
-          component: () => import('@/views/questionBank/QuestionBankManagement.vue'),
-          meta: { title: '题库管理' }
-        },
-        {
-          path: '/exams',
-          name: 'ExamManagement',
-          component: () => import('@/views/exam/ExamManagement.vue'),
-          meta: { title: '考试管理' }
+          path: '/term-types',
+          name: 'TerminologyTypeManagement',
+          component: () => import('@/views/term/TerminologyTypeManagement.vue'),
+          meta: { title: '术语类型管理' }
         },
         {
           path: '/media',

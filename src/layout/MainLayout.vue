@@ -24,30 +24,68 @@
           <span>用户管理</span>
         </el-menu-item>
         
-        <el-sub-menu index="content">
+        <el-sub-menu index="vocabs">
           <template #title>
             <el-icon><Document /></el-icon>
-            <span >内容管理</span>
+            <span>词汇管理</span>
           </template>
           <el-menu-item index="/vocabs">词汇管理</el-menu-item>
-          <el-menu-item index="/terms">术语管理</el-menu-item>
-          <el-menu-item index="/banners">轮播图管理</el-menu-item>
+          <el-menu-item index="/vocab-types">词汇类型管理</el-menu-item>
         </el-sub-menu>
         
-        <el-menu-item index="/question-bank">
-          <el-icon><Collection /></el-icon>
-          <span>题库管理</span>
-        </el-menu-item>
-        
-        <el-menu-item index="/exams">
-          <el-icon><Medal /></el-icon>
-          <span>考试管理</span>
-        </el-menu-item>
-        
+        <el-sub-menu index="terms">
+          <template #title>
+            <el-icon><Document /></el-icon>
+            <span>术语管理</span>
+          </template>
+          <el-menu-item index="/terms">术语管理</el-menu-item>
+          <el-menu-item index="/term-types">术语类型管理</el-menu-item>
+        </el-sub-menu>
         <el-menu-item index="/media">
           <el-icon><PictureFilled /></el-icon>
           <span>媒体资源</span>
         </el-menu-item>
+        <!-- 轮播图管理 - 功能开发中 -->
+        <!-- 
+        <el-menu-item index="/banners">
+          <el-icon><PictureFilled /></el-icon>
+          <span>轮播图管理</span>
+        </el-menu-item>
+        -->
+        
+        <!-- 题库管理 - 功能开发中 -->
+        <!-- 
+        <el-sub-menu index="question-bank">
+          <template #title>
+            <el-icon><Collection /></el-icon>
+            <span>题库管理</span>
+          </template>
+          <el-menu-item index="/listening-comprehension">听力理解</el-menu-item>
+          <el-menu-item index="/story-retell">故事复述</el-menu-item>
+          <el-menu-item index="/listening-qa">听力简答</el-menu-item>
+          <el-menu-item index="/atc-simulation">模拟通话</el-menu-item>
+          <el-menu-item index="/oral-interview">口语能力面试</el-menu-item>
+        </el-sub-menu>
+        -->
+        
+        <!-- 考试管理 - 功能开发中 -->
+        <!-- 
+        <el-sub-menu index="exams">
+          <template #title>
+            <el-icon><Medal /></el-icon>
+            <span>考试管理</span>
+          </template>
+          <el-menu-item index="/exam-modules">考试模块管理</el-menu-item>
+          <el-menu-item index="/exam-papers">试卷管理</el-menu-item>
+          <el-menu-item index="/exam-info">考试信息管理</el-menu-item>
+          <el-menu-item index="/exam-results">成绩管理</el-menu-item>
+        </el-sub-menu>
+        -->
+        
+        <!-- 媒体资源 - 功能开发中 -->
+        <!-- 
+
+        -->
         
         <el-menu-item index="/roles">
           <el-icon><Key /></el-icon>

@@ -283,11 +283,70 @@
               <el-icon><Plus /></el-icon>
               添加词汇
             </el-button>
-            <el-button type="success" @click="$router.push('/exercises/mcq')" class="action-btn">
-              <el-icon><Plus /></el-icon>
-              创建题目
-            </el-button>
-            <el-button type="warning" @click="$router.push('/media')" class="action-btn">
+            
+            <!-- 题库管理下拉框 -->
+            <el-dropdown trigger="click" class="dropdown-action">
+              <el-button type="success" class="action-btn dropdown-btn">
+                <el-icon><Reading /></el-icon>
+                题库管理
+                <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="navigateToQuestionBank('listening_mcq')">
+                    <el-icon><List /></el-icon>
+                    听力理解
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="navigateToQuestionBank('story_retell')">
+                    <el-icon><ChatDotRound /></el-icon>
+                    故事复述
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="navigateToQuestionBank('listening_sa')">
+                    <el-icon><Service /></el-icon>
+                    听力简答
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="navigateToQuestionBank('atc_sim')">
+                    <el-icon><Connection /></el-icon>
+                    模拟通话
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="navigateToQuestionBank('opi')">
+                    <el-icon><Microphone /></el-icon>
+                    口语能力面试
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            
+            <!-- 考试管理下拉框 -->
+            <el-dropdown trigger="click" class="dropdown-action">
+              <el-button type="warning" class="action-btn dropdown-btn">
+                <el-icon><Document /></el-icon>
+                考试管理
+                <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="navigateToExam('modules')">
+                    <el-icon><Grid /></el-icon>
+                    考试模块管理
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="navigateToExam('papers')">
+                    <el-icon><Document /></el-icon>
+                    试卷管理
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="navigateToExam('info')">
+                    <el-icon><InfoFilled /></el-icon>
+                    考试信息管理
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="navigateToExam('results')">
+                    <el-icon><TrendCharts /></el-icon>
+                    成绩管理
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            
+            <el-button type="danger" @click="$router.push('/media')" class="action-btn">
               <el-icon><Upload /></el-icon>
               上传媒体
             </el-button>
@@ -438,7 +497,15 @@ import {
   PieChart,
   Plus,
   Upload,
-  Bell
+  Bell,
+  ArrowDown,
+  List,
+  ChatDotRound,
+  Service,
+  Connection,
+  Microphone,
+  Grid,
+  InfoFilled
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { homeApi, statsApi, userStatsApi, mediaStatsApi, vocabStatsApi, termStatsApi } from '@/api/home'
@@ -910,6 +977,68 @@ const refreshAllData = async () => {
   }
 }
 
+// 导航方法
+const navigateToQuestionBank = (type) => {
+  // 根据题库类型导航到相应页面
+  switch (type) {
+    case 'listening_mcq':
+      // 导航到听力理解题库管理
+      ElMessage.info('正在跳转到听力理解题库管理...')
+      // $router.push('/questionbank?type=listening_mcq')
+      break
+    case 'story_retell':
+      // 导航到故事复述题库管理
+      ElMessage.info('正在跳转到故事复述题库管理...')
+      // $router.push('/questionbank?type=story_retell')
+      break
+    case 'listening_sa':
+      // 导航到听力简答题库管理
+      ElMessage.info('正在跳转到听力简答题库管理...')
+      // $router.push('/questionbank?type=listening_sa')
+      break
+    case 'atc_sim':
+      // 导航到模拟通话题库管理
+      ElMessage.info('正在跳转到模拟通话题库管理...')
+      // $router.push('/questionbank?type=atc_sim')
+      break
+    case 'opi':
+      // 导航到口语能力面试题库管理
+      ElMessage.info('正在跳转到口语能力面试题库管理...')
+      // $router.push('/questionbank?type=opi')
+      break
+    default:
+      ElMessage.warning('未知的题库类型')
+  }
+}
+
+const navigateToExam = (type) => {
+  // 根据考试管理类型导航到相应页面
+  switch (type) {
+    case 'modules':
+      // 导航到考试模块管理
+      ElMessage.info('正在跳转到考试模块管理...')
+      // $router.push('/exam/modules')
+      break
+    case 'papers':
+      // 导航到试卷管理
+      ElMessage.info('正在跳转到试卷管理...')
+      // $router.push('/exam/papers')
+      break
+    case 'info':
+      // 导航到考试信息管理
+      ElMessage.info('正在跳转到考试信息管理...')
+      // $router.push('/exam/info')
+      break
+    case 'results':
+      // 导航到成绩管理
+      ElMessage.info('正在跳转到成绩管理...')
+      // $router.push('/exam/results')
+      break
+    default:
+      ElMessage.warning('未知的考试管理类型')
+  }
+}
+
 // 工具函数
 const formatNumber = (num) => {
   if (!num && num !== 0) return '0'
@@ -1352,6 +1481,47 @@ onMounted(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+/* 下拉框样式 */
+.dropdown-action {
+  width: 100%;
+}
+
+.dropdown-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+
+.dropdown-icon {
+  margin-left: auto;
+  font-size: 12px;
+  transition: transform 0.3s ease;
+}
+
+.dropdown-action:hover .dropdown-icon {
+  transform: rotate(180deg);
+}
+
+/* 下拉菜单项样式 */
+:deep(.el-dropdown-menu__item) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+:deep(.el-dropdown-menu__item:hover) {
+  background-color: #f5f7fa;
+  color: #409eff;
+}
+
+:deep(.el-dropdown-menu__item .el-icon) {
+  font-size: 16px;
+}
+
 /* 最近活动样式 */
 .recent-activities {
   max-height: 320px;
@@ -1478,6 +1648,11 @@ onMounted(() => {
   }
   
   .action-btn {
+    flex: 1;
+    min-width: 120px;
+  }
+  
+  .dropdown-action {
     flex: 1;
     min-width: 120px;
   }
