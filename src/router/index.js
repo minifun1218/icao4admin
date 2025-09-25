@@ -57,12 +57,39 @@ const router = createRouter({
           component: () => import('@/views/term/TerminologyTypeManagement.vue'),
           meta: { title: '术语类型管理' }
         },
-        {
-          path: '/media',
-          name: 'MediaManagement',
-          component: () => import('@/views/media/MediaManagement.vue'),
-          meta: { title: '媒体资源管理' }
-        },
+            {
+              path: '/media',
+              name: 'MediaManagement',
+              component: () => import('@/views/media/MediaManagement.vue'),
+              meta: { title: '媒体资源管理' }
+            },
+            // 听力理解管理
+            {
+              path: '/listening-comprehension/questions',
+              name: 'ListeningQuestionManagement',
+              component: () => import('@/views/listening-comprehension/QuestionManagement.vue'),
+              meta: { title: '听力理解 - 问题管理' }
+            },
+            {
+              path: '/listening-comprehension/options',
+              name: 'ListeningChoiceManagement',
+              component: () => import('@/views/listening-comprehension/ChoiceManagement.vue'),
+              meta: { title: '听力理解 - 选项管理' }
+            },
+            // 故事复述管理
+            {
+              path: '/story-retell',
+              name: 'StoryRetellManagement',
+              component: () => import('@/views/story-retell/StoryRetellManagement.vue'),
+              meta: { title: '故事复述管理' }
+            },
+            // 听力简答管理
+            {
+              path: '/listening-qa/dialogs',
+              name: 'LSADialogManagement',
+              component: () => import('@/views/listening-qa/DialogManagement.vue'),
+              meta: { title: '听力简答 - 对话管理' }
+            },
         {
           path: '/roles',
           name: 'RoleManagement',

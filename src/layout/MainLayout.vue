@@ -60,11 +60,46 @@
             <el-icon><Collection /></el-icon>
             <span>题库管理</span>
           </template>
-          <el-menu-item index="/listening-comprehension">听力理解</el-menu-item>
+          
+          <!-- 听力理解 -->
+          <el-sub-menu index="listening-comprehension">
+            <template #title>
+              <span>听力理解</span>
+            </template>
+            <el-menu-item index="/listening-comprehension/questions">问题管理</el-menu-item>
+            <el-menu-item index="/listening-comprehension/options">选项管理</el-menu-item>
+          </el-sub-menu>
+          
+          <!-- 故事复述 -->
           <el-menu-item index="/story-retell">故事复述</el-menu-item>
-          <el-menu-item index="/listening-qa">听力简答</el-menu-item>
-          <el-menu-item index="/atc-simulation">模拟通话</el-menu-item>
-          <el-menu-item index="/oral-interview">口语能力面试</el-menu-item>
+          
+          <!-- 听力简答 -->
+          <el-sub-menu index="listening-qa">
+            <template #title>
+              <span>听力简答</span>
+            </template>
+            <el-menu-item index="/listening-qa/dialogs">对话管理</el-menu-item>
+            <el-menu-item index="/listening-qa/questions">问题管理</el-menu-item>
+          </el-sub-menu>
+          
+          <!-- 模拟通话 -->
+          <el-sub-menu index="atc-simulation">
+            <template #title>
+              <span>模拟通话</span>
+            </template>
+            <el-menu-item index="/atc-simulation/airports">机场管理</el-menu-item>
+            <el-menu-item index="/atc-simulation/scenarios">场景管理</el-menu-item>
+            <el-menu-item index="/atc-simulation/rounds">回合管理</el-menu-item>
+          </el-sub-menu>
+          
+          <!-- 口语能力面试 -->
+          <el-sub-menu index="oral-interview">
+            <template #title>
+              <span>口语能力面试</span>
+            </template>
+            <el-menu-item index="/oral-interview/topics">主题管理</el-menu-item>
+            <el-menu-item index="/oral-interview/questions">问题管理</el-menu-item>
+          </el-sub-menu>
         </el-sub-menu>
 
         
@@ -367,7 +402,6 @@ const handleLogout = () => {
 /* 子菜单项样式 */
 .sidebar-menu :deep(.el-sub-menu .el-menu-item) {
   color: #bfcbd9;
-  padding-left: 50px !important;
   background-color: #434a54;
 }
 
@@ -377,6 +411,33 @@ const handleLogout = () => {
 }
 
 .sidebar-menu .el-sub-menu .el-menu-item.is-active {
+  background-color: #409eff !important;
+  color: #ffffff;
+}
+
+/* 嵌套子菜单标题样式 */
+.sidebar-menu :deep(.el-sub-menu .el-sub-menu__title) {
+  color: #bfcbd9;
+  background-color: #434a54;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-sub-menu__title:hover) {
+  background-color: #434a54 !important;
+  color: #ffffff;
+}
+
+/* 嵌套子菜单项样式（三级菜单） */
+.sidebar-menu :deep(.el-sub-menu .el-sub-menu .el-menu-item) {
+  color: #bfcbd9;
+  background-color: #3a404a;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-sub-menu .el-menu-item:hover) {
+  background-color: #434a54 !important;
+  color: #ffffff;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-sub-menu .el-menu-item.is-active) {
   background-color: #409eff !important;
   color: #ffffff;
 }

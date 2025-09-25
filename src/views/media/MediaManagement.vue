@@ -389,6 +389,7 @@
         :on-change="handleFileChange"
         :before-upload="beforeUpload"
         :file-list="fileList"
+        v-model:file-list="fileList"
         multiple
         drag
         class="upload-demo"
@@ -1049,6 +1050,7 @@ const handlePageChange = (page) => {
 const showUploadDialog = () => {
   uploadVisible.value = true
   fileList.value = []
+  
   Object.assign(uploadForm, {
     type: 'auto',
     title: '',
@@ -1056,8 +1058,10 @@ const showUploadDialog = () => {
   })
 }
 
-const handleFileChange = (file) => {
-  // 文件选择处理
+const handleFileChange = (file, fileList) => {
+  // 文件选择处理 - 更新文件列表
+  console.log('文件变化:', file, fileList)
+  // 注意：Element Plus的文件列表已经自动维护了
 }
 
 const beforeUpload = (file) => {
@@ -1077,7 +1081,9 @@ const beforeUpload = (file) => {
 }
 
 const handleUpload = async () => {
-  if (fileList.value.length === 0) {
+  console.log('开始上传，文件列表:', fileList.value)
+  
+  if (!fileList.value || fileList.value.length === 0) {
     ElMessage.warning('请选择要上传的文件')
     return
   }
@@ -1087,7 +1093,15 @@ const handleUpload = async () => {
     
     for (const file of fileList.value) {
       const formData = new FormData()
-      formData.append('file', file.raw)
+      // 使用 file.raw 获取原始文件对象
+      const rawFile = file.raw || file
+      
+      if (!rawFile) {
+        console.error('无法获取文件对象:', file)
+        continue
+      }
+      
+      formData.append('file', rawFile)
       formData.append('type', uploadForm.type)
       
       if (uploadForm.title) {
@@ -1098,15 +1112,18 @@ const handleUpload = async () => {
         formData.append('description', uploadForm.description)
       }
       
+      console.log('上传文件:', rawFile.name, '大小:', rawFile.size, '类型:', uploadForm.type)
       await uploadMediaFile(formData)
     }
     
     ElMessage.success('上传成功')
     uploadVisible.value = false
+    // 清空文件列表
+    fileList.value = []
     refreshList()
   } catch (error) {
-    ElMessage.error('上传失败')
-    console.error(error)
+    ElMessage.error('上传失败: ' + (error.message || error))
+    console.error('上传错误:', error)
   } finally {
     uploadLoading.value = false
   }
