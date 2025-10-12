@@ -7,7 +7,6 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [
     vue(),
-    vueDevTools(),
   ],
   resolve: {
     alias: {

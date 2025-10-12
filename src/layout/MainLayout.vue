@@ -97,30 +97,21 @@
             <template #title>
               <span>口语能力面试</span>
             </template>
-            <el-menu-item index="/oral-interview/topics">主题管理</el-menu-item>
-            <el-menu-item index="/oral-interview/questions">问题管理</el-menu-item>
+            <el-menu-item index="/oral-interview/topics">话题管理</el-menu-item>
+            <el-menu-item index="/oral-interview/questions">口语问题管理</el-menu-item>
           </el-sub-menu>
         </el-sub-menu>
 
-        
-        <!-- 考试管理 - 功能开发中 -->
-        <!-- 
+        <!-- 考试管理 -->
         <el-sub-menu index="exams">
           <template #title>
             <el-icon><Medal /></el-icon>
             <span>考试管理</span>
           </template>
-          <el-menu-item index="/exam-modules">考试模块管理</el-menu-item>
+          <el-menu-item index="/exam-modules">模块管理</el-menu-item>
           <el-menu-item index="/exam-papers">试卷管理</el-menu-item>
-          <el-menu-item index="/exam-info">考试信息管理</el-menu-item>
           <el-menu-item index="/exam-results">成绩管理</el-menu-item>
         </el-sub-menu>
-        -->
-        
-        <!-- 媒体资源 - 功能开发中 -->
-        <!-- 
-
-        -->
         
         <el-menu-item index="/roles">
           <el-icon><Key /></el-icon>

@@ -80,18 +80,23 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="audioId" label="音频" width="120" align="center">
+        <el-table-column prop="audioId" label="音频" width="80" align="center">
           <template #default="scope">
-            <el-button 
-              v-if="scope.row.audioId" 
-              type="primary" 
-              size="small" 
-              @click="playAudio(scope.row.audioId)"
-            >
-              <el-icon><VideoPlay /></el-icon>
-              播放
-            </el-button>
-            <span v-else class="text-muted">无音频</span>
+            <template v-if="scope.row.audioId">
+              <el-tooltip 
+                :content="playingAudioId === scope.row.audioId ? '暂停音频' : '播放音频'" 
+                placement="top"
+              >
+                <el-button 
+                  :type="playingAudioId === scope.row.audioId ? 'success' : 'primary'"
+                  :icon="playingAudioId === scope.row.audioId ? VideoPause : VideoPlay"
+                  circle
+                  :class="{ 'playing-audio-btn': playingAudioId === scope.row.audioId }"
+                  @click="toggleAudio(scope.row.audioId)"
+                />
+              </el-tooltip>
+            </template>
+            <span v-else class="text-muted">无</span>
           </template>
         </el-table-column>
         <el-table-column prop="playOnce" label="播放模式" width="120" align="center">
@@ -116,28 +121,30 @@
             {{ formatDateTime(scope.row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="340" fixed="right">
           <template #default="scope">
-            <el-button size="small" @click="handleView(scope.row)">
-              <el-icon><View /></el-icon>
-              查看
-            </el-button>
-            <el-button size="small" type="primary" @click="handleEdit(scope.row)">
-              <el-icon><Edit /></el-icon>
-              编辑
-            </el-button>
-            <el-button size="small" @click="handleCopy(scope.row)">
-              <el-icon><CopyDocument /></el-icon>
-              复制
-            </el-button>
-            <el-button size="small" @click="handleChoices(scope.row)">
-              <el-icon><List /></el-icon>
-              选项
-            </el-button>
-            <el-button size="small" type="danger" @click="handleDelete(scope.row)">
-              <el-icon><Delete /></el-icon>
-              删除
-            </el-button>
+            <div class="action-buttons">
+              <el-button size="small" @click="handleView(scope.row)">
+                <el-icon><View /></el-icon>
+                查看
+              </el-button>
+              <el-button size="small" type="primary" @click="handleEdit(scope.row)">
+                <el-icon><Edit /></el-icon>
+                编辑
+              </el-button>
+              <el-button size="small" @click="handleCopy(scope.row)">
+                <el-icon><CopyDocument /></el-icon>
+                复制
+              </el-button>
+              <el-button size="small" type="success" @click="handleChoices(scope.row)">
+                <el-icon><List /></el-icon>
+                选项
+              </el-button>
+              <el-button size="small" type="danger" @click="handleDelete(scope.row)">
+                <el-icon><Delete /></el-icon>
+                删除
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -307,11 +314,69 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 查看选项对话框 -->
+    <el-dialog v-model="choicesVisible" title="题目选项" width="800px">
+      <div v-loading="choicesLoading" class="choices-dialog">
+        <div v-if="currentQuestionForChoices" class="question-info">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="题目ID">{{ currentQuestionForChoices.id }}</el-descriptions-item>
+            <el-descriptions-item label="所属模块">{{ getModuleName(currentQuestionForChoices.moduleId) }}</el-descriptions-item>
+            <el-descriptions-item label="题干内容" :span="2">
+              <div class="text-content">{{ currentQuestionForChoices.textStem || '暂无题干' }}</div>
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+
+        <div class="choices-section">
+          <div class="section-header">
+            <h4>选项列表</h4>
+            <el-button 
+              type="primary" 
+              size="small" 
+              @click="goToChoiceManagement"
+            >
+              <el-icon><Edit /></el-icon>
+              管理选项
+            </el-button>
+          </div>
+          
+          <el-empty v-if="currentChoices.length === 0" description="暂无选项数据" />
+          
+          <div v-else class="choices-list">
+            <el-card 
+              v-for="choice in currentChoices" 
+              :key="choice.id" 
+              class="choice-card"
+              :class="{ 'correct-choice': choice.isCorrect }"
+            >
+              <div class="choice-header">
+                <div class="choice-label">
+                  <el-tag :type="choice.isCorrect ? 'success' : 'info'" size="large">
+                    {{ choice.label }}
+                  </el-tag>
+                  <el-tag v-if="choice.isCorrect" type="success" size="small">
+                    <el-icon><Check /></el-icon>
+                    正确答案
+                  </el-tag>
+                </div>
+                <span class="choice-id">ID: {{ choice.id }}</span>
+              </div>
+              <div class="choice-content">
+                {{ choice.content }}
+              </div>
+            </el-card>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Plus,
@@ -321,10 +386,12 @@ import {
   Download,
   Search,
   VideoPlay,
+  VideoPause,
   View,
   Edit,
   CopyDocument,
-  List
+  List,
+  Check
 } from '@element-plus/icons-vue'
 import {
   getQuestions,
@@ -340,17 +407,24 @@ import {
   exportQuestions,
   formatAnswerTime,
   formatPlayMode,
-  validateQuestionData
+  validateQuestionData,
+  getChoicesByQuestionId
 } from '@/api/listening-mcq'
 import { getMediaList } from '@/api/media'
+import request from '@/utils/request'
+
+// 路由
+const router = useRouter()
 
 // 响应式数据
 const loading = ref(false)
 const saveLoading = ref(false)
 const importLoading = ref(false)
+const choicesLoading = ref(false)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const importVisible = ref(false)
+const choicesVisible = ref(false)
 const isEditing = ref(false)
 
 const questionList = ref([])
@@ -358,6 +432,12 @@ const selectedQuestions = ref([])
 const searchKeyword = ref('')
 const filterModule = ref('')
 const modules = ref([])
+const currentChoices = ref([])
+const currentQuestionForChoices = ref(null)
+
+// 音频播放相关
+const playingAudioId = ref(null)
+const currentAudio = ref(null)
 
 const pagination = reactive({
   page: 1,
@@ -494,9 +574,39 @@ const handleCopy = async (question) => {
   }
 }
 
-const handleChoices = (question) => {
-  // TODO: 跳转到选项管理页面
-  ElMessage.info('选项管理功能待实现')
+const handleChoices = async (question) => {
+  try {
+    currentQuestionForChoices.value = question
+    choicesVisible.value = true
+    choicesLoading.value = true
+    
+    const response = await getChoicesByQuestionId(question.id)
+    
+    if (response && response.data) {
+      // 根据label排序
+      currentChoices.value = (response.data.data || []).sort((a, b) => 
+        a.label.localeCompare(b.label)
+      )
+    } else {
+      currentChoices.value = []
+    }
+  } catch (error) {
+    console.error('加载选项错误:', error)
+    ElMessage.error('加载选项失败')
+    currentChoices.value = []
+  } finally {
+    choicesLoading.value = false
+  }
+}
+
+const goToChoiceManagement = () => {
+  if (currentQuestionForChoices.value) {
+    router.push({
+      name: 'ListeningChoiceManagement',
+      query: { questionId: currentQuestionForChoices.value.id }
+    })
+    choicesVisible.value = false
+  }
 }
 
 const handleDelete = (question) => {
@@ -686,17 +796,171 @@ const removeAudio = () => {
 const loadAudioForQuestion = async (question) => {
   if (question.audioId) {
     try {
-      // TODO: 根据audioId加载音频文件URL
-      currentAudioUrl.value = `/api/media/preview/audio_${question.audioId}.mp3`
+      // 通过后端API获取音频URL
+      const audioUrl = await getAudioUrl(question.audioId)
+      currentAudioUrl.value = audioUrl || ''
+      console.log('加载题目音频URL:', currentAudioUrl.value)
     } catch (error) {
       console.error('加载音频错误:', error)
+      currentAudioUrl.value = ''
     }
+  } else {
+    currentAudioUrl.value = ''
   }
 }
 
-const playAudio = (audioId) => {
-  // TODO: 实现音频播放逻辑
-  ElMessage.info(`播放音频 ID: ${audioId}`)
+// 切换音频播放/暂停
+const toggleAudio = async (audioId) => {
+  // 如果点击的是正在播放的音频，则暂停
+  if (playingAudioId.value === audioId && currentAudio.value) {
+    pauseAudio()
+    return
+  }
+  
+  // 否则播放新音频
+  await playAudio(audioId)
+}
+
+// 暂停音频
+const pauseAudio = () => {
+  if (currentAudio.value) {
+    currentAudio.value.pause()
+    playingAudioId.value = null
+    currentAudio.value = null
+    console.log('🎵 音频已暂停')
+  }
+}
+
+// 播放音频
+const playAudio = async (audioId) => {
+  console.log('🎵 尝试播放音频，音频ID:', audioId)
+  
+  if (!audioId) {
+    ElMessage.warning('音频ID不存在')
+    return
+  }
+  
+  // 如果有正在播放的音频，先停止
+  if (currentAudio.value) {
+    currentAudio.value.pause()
+    currentAudio.value = null
+  }
+  
+  try {
+    // 通过后端API获取媒体资源信息
+    console.log('🎵 调用后端API获取媒体资源:', audioId)
+    const response = await request.get(`/media/${audioId}`)
+
+    console.log('🎵 后端媒体资源响应:', response.data)
+
+    const previewUrl = response.data.data.previewUrl
+    console.log('🎵 后端返回的预览URL:', previewUrl)
+
+    // 将相对路径拼接成完整路径
+    let audioUrl = null
+    if (previewUrl) {
+      if (previewUrl.startsWith('http')) {
+        // 已经是完整URL
+        audioUrl = previewUrl
+      } else {
+        // 相对路径，需要拼接API基础路径
+        const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+        audioUrl = previewUrl.startsWith('/') ? `${baseURL}${previewUrl}` : `${baseURL}/${previewUrl}`
+      }
+    }
+    
+    console.log('🎵 构建的完整音频URL:', audioUrl)
+    
+    if (!audioUrl) {
+      ElMessage.error('无法获取音频URL')
+      return
+    }
+    
+    // 创建音频元素
+    const audio = new Audio(audioUrl)
+    currentAudio.value = audio
+    
+    // 添加加载事件监听
+    audio.addEventListener('loadstart', () => {
+      console.log('🎵 开始加载音频')
+    })
+    
+    audio.addEventListener('canplay', () => {
+      console.log('🎵 音频可以播放')
+    })
+    
+    audio.addEventListener('error', (e) => {
+      console.error('🎵 音频加载错误:', e)
+      ElMessage.error('音频文件加载失败')
+      playingAudioId.value = null
+      currentAudio.value = null
+    })
+    
+    // 音频播放结束时重置状态
+    audio.addEventListener('ended', () => {
+      console.log('🎵 音频播放完成')
+      playingAudioId.value = null
+      currentAudio.value = null
+    })
+    
+    // 尝试播放
+    audio.play().then(() => {
+      console.log('🎵 音频播放开始')
+      playingAudioId.value = audioId
+    }).catch(error => {
+      console.error('🎵 音频播放失败:', error)
+      ElMessage.error('音频播放失败: ' + error.message)
+      playingAudioId.value = null
+      currentAudio.value = null
+    })
+    
+  } catch (error) {
+    console.error('🎵 调用后端API失败:', error)
+    ElMessage.error('获取音频资源失败: ' + (error.message || error))
+    playingAudioId.value = null
+    currentAudio.value = null
+  }
+}
+
+// 获取音频URL的辅助方法（用于详情页面等）
+const getAudioUrl = async (audioId) => {
+  console.log('🎵 getAudioUrl 被调用，音频ID:', audioId)
+  
+  if (!audioId) {
+    console.log('🎵 没有音频ID，返回null')
+    return null
+  }
+  
+  try {
+    // 通过后端API获取媒体资源信息
+    const response = await request.get(`/media/${audioId}`)
+    
+    console.log('🎵 getAudioUrl - 后端响应:', response.data)
+    
+    const previewUrl = response.data.data?.previewUrl
+    if (!previewUrl) {
+      console.error('🎵 后端未返回previewUrl')
+      return null
+    }
+    
+    // 将相对路径拼接成完整路径
+    let audioUrl = null
+    if (previewUrl.startsWith('http')) {
+      // 已经是完整URL
+      audioUrl = previewUrl
+    } else {
+      // 相对路径，需要拼接API基础路径
+      const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+      audioUrl = previewUrl.startsWith('/') ? `${baseURL}${previewUrl}` : `${baseURL}/${previewUrl}`
+    }
+    
+    console.log('🎵 生成的音频URL:', audioUrl)
+    return audioUrl
+    
+  } catch (error) {
+    console.error('🎵 获取音频URL失败:', error)
+    return null
+  }
 }
 
 // 导入相关方法
@@ -919,5 +1183,108 @@ onMounted(() => {
 .import-options .el-checkbox {
   display: block;
   margin-bottom: 12px;
+}
+
+/* 操作按钮样式 */
+.action-buttons {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.action-buttons .el-button {
+  margin: 0;
+  padding: 5px 8px;
+}
+
+/* 选项弹窗样式 */
+.choices-dialog {
+  min-height: 200px;
+}
+
+.question-info {
+  margin-bottom: 20px;
+}
+
+.choices-section {
+  margin-top: 20px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-header h4 {
+  margin: 0;
+  color: #303133;
+  font-size: 16px;
+}
+
+.choices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.choice-card {
+  border-left: 4px solid #dcdfe6;
+  transition: all 0.3s;
+}
+
+.choice-card:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.choice-card.correct-choice {
+  border-left-color: #67c23a;
+  background-color: #f0f9ff;
+}
+
+.choice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.choice-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.choice-id {
+  font-size: 12px;
+  color: #909399;
+}
+
+.choice-content {
+  color: #303133;
+  line-height: 1.6;
+  font-size: 14px;
+  padding: 8px 12px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+/* 正在播放的音频按钮样式 */
+.playing-audio-btn {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(103, 194, 58, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(103, 194, 58, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(103, 194, 58, 0);
+  }
 }
 </style>

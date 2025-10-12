@@ -71,61 +71,129 @@
       </el-row>
     </div>
 
-    <!-- 主题树形结构 -->
-    <div class="tree-container">
-      <el-tree
-        ref="topicTree"
+    <!-- 主题数据表格 -->
+    <div class="table-container">
+      <el-table
         v-loading="loading"
-        :data="topicTreeData"
-        :props="treeProps"
-        :expand-on-click-node="false"
-        :check-on-click-node="false"
-        show-checkbox
-        node-key="id"
-        @check-change="handleNodeCheck"
-        @node-click="handleNodeClick"
-        class="topic-tree"
+        :data="filteredTopicList"
+        @selection-change="handleSelectionChange"
+        row-key="id"
+        :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
+        stripe
+        border
       >
-        <template #default="{ node, data }">
-          <div class="tree-node">
-            <div class="node-content">
-              <div class="node-info">
-                <span class="node-title">{{ data.nameZh }}</span>
-                <span v-if="data.nameEn" class="node-subtitle">({{ data.nameEn }})</span>
-                <el-tag size="small" class="node-code">{{ data.code }}</el-tag>
-              </div>
-              <div class="node-actions">
-                <el-button 
-                  type="primary" 
-                  size="small" 
-                  @click.stop="handleAddChild(data)"
-                >
-                  添加子项
-                </el-button>
-                <el-button 
-                  size="small" 
-                  @click.stop="handleEdit(data)"
-                >
-                  编辑
-                </el-button>
-                <el-button 
-                  type="danger" 
-                  size="small" 
-                  @click.stop="handleDelete(data)"
-                >
-                  删除
-                </el-button>
-              </div>
+        <el-table-column type="selection" width="55" />
+        <el-table-column 
+          prop="nameZh" 
+          label="中文名称" 
+          width="200"
+          show-overflow-tooltip
+        >
+          <template #default="scope">
+            <div class="topic-name">
+              <span class="name-zh">{{ scope.row.nameZh }}</span>
+              <span v-if="scope.row.nameEn" class="name-en">({{ scope.row.nameEn }})</span>
             </div>
-            <div v-if="data.description" class="node-description">
-              {{ data.description }}
-            </div>
-          </div>
-        </template>
-      </el-tree>
+          </template>
+        </el-table-column>
+        <el-table-column 
+          prop="code" 
+          label="主题代码" 
+          width="150"
+          show-overflow-tooltip
+        >
+          <template #default="scope">
+            <el-tag size="small" type="info">{{ scope.row.code }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column 
+          prop="description" 
+          label="描述" 
+          min-width="200"
+          show-overflow-tooltip
+        />
+        <el-table-column 
+          prop="displayOrder" 
+          label="显示顺序" 
+          width="100"
+          align="center"
+        />
+        <el-table-column 
+          label="层级" 
+          width="80"
+          align="center"
+        >
+          <template #default="scope">
+            <el-tag size="small" :type="getDepthType(scope.row.depth)">
+              {{ scope.row.depth || 0 }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column 
+          label="词汇数量" 
+          width="100"
+          align="center"
+        >
+          <template #default="scope">
+            <el-badge :value="scope.row.vocabCount || 0" type="primary" />
+          </template>
+        </el-table-column>
+        <el-table-column 
+          prop="createdAt" 
+          label="创建时间" 
+          width="180"
+        >
+          <template #default="scope">
+            {{ formatDateTime(scope.row.createdAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="300" fixed="right">
+          <template #default="scope">
+            <el-button 
+              type="primary" 
+              size="small" 
+              @click="handleAddChild(scope.row)"
+            >
+              添加子项
+            </el-button>
+            <el-button 
+              size="small" 
+              @click="handleEdit(scope.row)"
+            >
+              编辑
+            </el-button>
+            <el-button 
+              size="small" 
+              @click="handleViewVocabs(scope.row)"
+            >
+              查看词汇
+            </el-button>
+            <el-button 
+              type="danger" 
+              size="small" 
+              @click="handleDelete(scope.row)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 分页 -->
+      <div class="pagination">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.size"
+          :total="pagination.total"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
 
       <!-- 空状态 -->
-      <div v-if="!loading && topicTreeData.length === 0" class="empty-state">
+      <div v-if="!loading && filteredTopicList.length === 0" class="empty-state">
         <el-empty description="暂无主题数据">
           <el-button type="primary" @click="showCreateDialog">添加第一个主题</el-button>
         </el-empty>
@@ -216,33 +284,55 @@
     <el-dialog
       v-model="vocabMappingVisible"
       title="关联词汇管理"
-      width="800px"
+      width="900px"
       :close-on-click-modal="false"
     >
       <div class="mapping-section">
         <div class="section-header">
           <h4>主题：{{ selectedTopicForMapping?.nameZh }}</h4>
-          <el-button type="primary" @click="showAddVocabDialog">
-            <el-icon><Plus /></el-icon>
-            添加词汇
-          </el-button>
+          <div class="header-actions">
+            <el-button type="primary" @click="showAddVocabDialog">
+              <el-icon><Plus /></el-icon>
+              添加词汇
+            </el-button>
+            <el-button @click="loadMappedVocabs(selectedTopicForMapping?.id)">
+              <el-icon><Refresh /></el-icon>
+              刷新
+            </el-button>
+          </div>
         </div>
         
         <el-table
           :data="mappedVocabs"
           v-loading="mappingLoading"
           @selection-change="handleVocabSelection"
+          border
         >
           <el-table-column type="selection" width="55" />
-          <el-table-column prop="headword" label="词汇" width="150" />
-          <el-table-column prop="definitionZh" label="中文释义" />
+          <el-table-column prop="headword" label="词汇" width="150">
+            <template #default="scope">
+              <div class="vocab-display">
+                <span class="headword">{{ scope.row.headword }}</span>
+                <span v-if="scope.row.ipa" class="ipa">[{{ scope.row.ipa }}]</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="definitionZh" label="中文释义" min-width="200" />
+          <el-table-column prop="pos" label="词性" width="80" />
+          <el-table-column prop="cefrLevel" label="CEFR" width="80">
+            <template #default="scope">
+              <el-tag v-if="scope.row.cefrLevel" size="small">
+                {{ scope.row.cefrLevel }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="主要归属" width="100" align="center">
             <template #default="scope">
               <el-tag v-if="scope.row.isPrimary" type="primary" size="small">主要</el-tag>
               <el-tag v-else type="info" size="small">次要</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="120">
+          <el-table-column label="操作" width="150">
             <template #default="scope">
               <el-button 
                 size="small" 
@@ -267,6 +357,55 @@
 
       <template #footer>
         <el-button @click="vocabMappingVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 添加词汇到主题对话框 -->
+    <el-dialog v-model="addVocabVisible" title="添加词汇到主题" width="800px">
+      <div class="add-vocab-section">
+        <div class="search-section">
+          <el-input
+            v-model="vocabSearchKeyword"
+            placeholder="搜索词汇..."
+            @keyup.enter="searchAvailableVocabs"
+          >
+            <template #suffix>
+              <el-button @click="searchAvailableVocabs">搜索</el-button>
+            </template>
+          </el-input>
+        </div>
+
+        <el-table
+          :data="availableVocabs"
+          v-loading="availableVocabsLoading"
+          @selection-change="handleAvailableVocabSelection"
+          max-height="400"
+          border
+        >
+          <el-table-column type="selection" width="55" />
+          <el-table-column prop="headword" label="词汇" width="150" />
+          <el-table-column prop="definitionZh" label="中文释义" min-width="200" />
+          <el-table-column prop="pos" label="词性" width="80" />
+          <el-table-column prop="cefrLevel" label="CEFR" width="80">
+            <template #default="scope">
+              <el-tag v-if="scope.row.cefrLevel" size="small">
+                {{ scope.row.cefrLevel }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <template #footer>
+        <el-button @click="addVocabVisible = false">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="handleAddVocabsToTopic"
+          :loading="addVocabLoading"
+          :disabled="selectedAvailableVocabs.length === 0"
+        >
+          添加选中词汇
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -298,32 +437,40 @@ import {
   getVocabTopicMappingsByTopicId,
   addVocabsToTopic,
   removeVocabsFromTopic,
-  setPrimaryTopic
+  setPrimaryTopic,
+  getVocabs
 } from '@/api/vocab'
 
 // 响应式数据
 const loading = ref(false)
 const saveLoading = ref(false)
 const mappingLoading = ref(false)
+const availableVocabsLoading = ref(false)
+const addVocabLoading = ref(false)
 const dialogVisible = ref(false)
 const vocabMappingVisible = ref(false)
+const addVocabVisible = ref(false)
 const dialogMode = ref('view') // view, edit, create
 const searchKeyword = ref('')
+const vocabSearchKeyword = ref('')
 
-const topicTreeData = ref([])
+const topicList = ref([])
+const filteredTopicList = ref([])
 const selectedTopics = ref([])
 const statistics = ref({})
 const topicSelectOptions = ref([])
 const mappedVocabs = ref([])
 const selectedMappedVocabs = ref([])
+const availableVocabs = ref([])
+const selectedAvailableVocabs = ref([])
 const selectedTopicForMapping = ref(null)
 
-// 树形组件配置
-const treeProps = {
-  children: 'children',
-  label: 'nameZh',
-  disabled: false
-}
+// 分页
+const pagination = reactive({
+  page: 1,
+  size: 20,
+  total: 0
+})
 
 // 当前主题
 const currentTopic = reactive({
@@ -364,20 +511,42 @@ const getDialogTitle = computed(() => {
   }
 })
 
+const formatDateTime = computed(() => {
+  return (dateTime) => {
+    if (!dateTime) return '-'
+    return new Date(dateTime).toLocaleString('zh-CN')
+  }
+})
+
+// 获取深度标签类型
+const getDepthType = (depth) => {
+  if (depth === 0) return 'primary'
+  if (depth === 1) return 'success'
+  if (depth === 2) return 'warning'
+  return 'danger'
+}
+
 // 模板引用
 const topicForm = ref(null)
-const topicTree = ref(null)
 
 // 方法
 const loadTopics = async () => {
   try {
     loading.value = true
-    const response = await getVocabTopicHierarchy()
-    topicTreeData.value = response.data
+    const params = {
+      page: pagination.page - 1,
+      size: pagination.size,
+      sort: 'displayOrder',
+      direction: 'ASC'
+    }
     
-    // 同时加载平铺的选项数据（用于父级选择）
-    const flatResponse = await getVocabTopics({ page: 0, size: 1000 })
-    topicSelectOptions.value = flatResponse.data.content
+    const response = await getVocabTopics(params)
+    topicList.value = response.data.content
+    pagination.total = response.data.totalElements
+    
+    // 构建层级结构和选项数据
+    buildTopicHierarchy()
+    topicSelectOptions.value = topicList.value
   } catch (error) {
     ElMessage.error('加载主题列表失败')
     console.error(error)
@@ -386,10 +555,28 @@ const loadTopics = async () => {
   }
 }
 
+const buildTopicHierarchy = () => {
+  // 简化处理，假设数据已经是扁平结构
+  // 实际项目中可能需要根据parentId构建树形结构
+  filteredTopicList.value = topicList.value.map(topic => ({
+    ...topic,
+    depth: topic.parentId ? 1 : 0,
+    vocabCount: 0 // 需要从后端获取
+  }))
+}
+
 const loadStatistics = async () => {
   try {
-    const response = await getVocabTopicStatistics()
-    statistics.value = response.data
+    // 计算统计信息
+    const totalCount = topicList.value.length
+    const rootCount = topicList.value.filter(topic => !topic.parentId).length
+    
+    statistics.value = {
+      totalCount,
+      rootCount,
+      mappedVocabCount: 0, // 需要从后端获取
+      maxDepth: Math.max(...filteredTopicList.value.map(topic => topic.depth || 0))
+    }
   } catch (error) {
     console.error('加载统计信息失败:', error)
   }
@@ -502,68 +689,43 @@ const handleSaveTopic = async () => {
   }
 }
 
-const handleSearch = async () => {
-  if (!searchKeyword.value.trim()) {
-    loadTopics()
-    return
-  }
-  
-  try {
-    loading.value = true
-    const response = await searchVocabTopics({
-      keyword: searchKeyword.value,
-      page: 0,
-      size: 1000
-    })
-    
-    // 将搜索结果转换为树形结构
-    topicTreeData.value = response.data.content.map(topic => ({
-      ...topic,
-      children: []
-    }))
-  } catch (error) {
-    ElMessage.error('搜索失败')
-    console.error(error)
-  } finally {
-    loading.value = false
-  }
+
+const handleSelectionChange = (selection) => {
+  selectedTopics.value = selection
 }
 
-const handleNodeCheck = (data, checked, indeterminate) => {
-  // 处理节点选择
-  const checkedNodes = topicTree.value.getCheckedNodes()
-  selectedTopics.value = checkedNodes
+const handleSizeChange = (size) => {
+  pagination.size = size
+  pagination.page = 1
+  loadTopics()
 }
 
-const handleNodeClick = (data) => {
-  // 点击节点时的处理
-  console.log('点击节点:', data)
+const handlePageChange = (page) => {
+  pagination.page = page
+  loadTopics()
 }
 
 const expandAll = () => {
-  // 展开所有节点
-  const expandAllNodes = (nodes) => {
-    nodes.forEach(node => {
-      topicTree.value.store.nodesMap[node.id].expanded = true
-      if (node.children && node.children.length > 0) {
-        expandAllNodes(node.children)
-      }
-    })
-  }
-  expandAllNodes(topicTreeData.value)
+  // 展开所有节点的逻辑
+  ElMessage.info('展开全部功能待实现')
 }
 
 const collapseAll = () => {
-  // 收起所有节点
-  const collapseAllNodes = (nodes) => {
-    nodes.forEach(node => {
-      topicTree.value.store.nodesMap[node.id].expanded = false
-      if (node.children && node.children.length > 0) {
-        collapseAllNodes(node.children)
-      }
-    })
+  // 收起所有节点的逻辑
+  ElMessage.info('收起全部功能待实现')
+}
+
+const handleSearch = () => {
+  if (!searchKeyword.value.trim()) {
+    filteredTopicList.value = topicList.value
+    return
   }
-  collapseAllNodes(topicTreeData.value)
+  
+  filteredTopicList.value = topicList.value.filter(topic => 
+    topic.nameZh.includes(searchKeyword.value) ||
+    topic.nameEn?.includes(searchKeyword.value) ||
+    topic.code.includes(searchKeyword.value)
+  )
 }
 
 const resetCurrentTopic = () => {
@@ -578,7 +740,7 @@ const resetCurrentTopic = () => {
 }
 
 // 词汇映射相关方法
-const showVocabMapping = async (topic) => {
+const handleViewVocabs = async (topic) => {
   selectedTopicForMapping.value = topic
   await loadMappedVocabs(topic.id)
   vocabMappingVisible.value = true
@@ -588,10 +750,12 @@ const loadMappedVocabs = async (topicId) => {
   try {
     mappingLoading.value = true
     const response = await getVocabTopicMappingsByTopicId(topicId)
-    mappedVocabs.value = response.data.map(mapping => ({
-      ...mapping.vocab,
-      isPrimary: mapping.isPrimary,
-      mappingId: mapping.id
+    // Handle paginated response - data is in content property
+    const dataArray = response.data.content || response.data
+    mappedVocabs.value = dataArray.map(item => ({
+      ...item,
+      isPrimary: item.isPrimary || false,
+      mappingId: item.mappingId || item.id
     }))
   } catch (error) {
     ElMessage.error('加载关联词汇失败')
@@ -655,8 +819,54 @@ const handleRemoveVocabMapping = async () => {
 }
 
 const showAddVocabDialog = () => {
-  // 显示添加词汇到主题的对话框
-  ElMessage.info('添加词汇功能待实现')
+  vocabSearchKeyword.value = ''
+  availableVocabs.value = []
+  selectedAvailableVocabs.value = []
+  addVocabVisible.value = true
+}
+
+const searchAvailableVocabs = async () => {
+  try {
+    availableVocabsLoading.value = true
+    const params = {
+      page: 0,
+      size: 100
+    }
+    
+    if (vocabSearchKeyword.value.trim()) {
+      params.headword = vocabSearchKeyword.value
+    }
+    
+    const response = await getVocabs(params)
+    availableVocabs.value = response.data.content
+  } catch (error) {
+    ElMessage.error('搜索词汇失败')
+    console.error(error)
+  } finally {
+    availableVocabsLoading.value = false
+  }
+}
+
+const handleAvailableVocabSelection = (selection) => {
+  selectedAvailableVocabs.value = selection
+}
+
+const handleAddVocabsToTopic = async () => {
+  try {
+    addVocabLoading.value = true
+    const vocabIds = selectedAvailableVocabs.value.map(vocab => vocab.id)
+    
+    await addVocabsToTopic(selectedTopicForMapping.value.id, vocabIds)
+    ElMessage.success('添加词汇成功')
+    
+    addVocabVisible.value = false
+    await loadMappedVocabs(selectedTopicForMapping.value.id)
+  } catch (error) {
+    ElMessage.error('添加词汇失败')
+    console.error(error)
+  } finally {
+    addVocabLoading.value = false
+  }
 }
 
 // 生命周期
@@ -716,65 +926,32 @@ onMounted(() => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.tree-container {
+.table-container {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  min-height: 400px;
 }
 
-.topic-tree {
-  padding: 20px;
-}
-
-.tree-node {
-  flex: 1;
+.topic-name {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
-.node-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.node-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-
-.node-title {
+.name-zh {
   font-weight: 500;
   color: #303133;
 }
 
-.node-subtitle {
+.name-en {
   color: #909399;
   font-size: 12px;
 }
 
-.node-code {
-  font-family: 'Courier New', monospace;
-  font-size: 11px;
-}
-
-.node-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.node-description {
-  color: #606266;
-  font-size: 12px;
-  line-height: 1.4;
-  padding-left: 20px;
-  border-left: 2px solid #e4e7ed;
-  margin-left: 10px;
+.pagination {
+  padding: 20px;
+  text-align: center;
+  border-top: 1px solid #e9ecef;
 }
 
 .empty-state {
@@ -800,21 +977,41 @@ onMounted(() => {
   color: #303133;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.vocab-display {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.headword {
+  font-weight: 500;
+  color: #303133;
+}
+
+.ipa {
+  font-size: 12px;
+  color: #909399;
+  font-style: italic;
+}
+
+.add-vocab-section {
+  margin-bottom: 20px;
+}
+
+.search-section {
+  margin-bottom: 16px;
+}
+
 .mapping-actions {
   margin-top: 16px;
   text-align: center;
 }
 
-/* 自定义树形组件样式 */
-:deep(.el-tree-node__content) {
-  height: auto;
-  min-height: 40px;
-  padding: 8px 0;
-}
-
-:deep(.el-tree-node__expand-icon) {
-  margin-right: 8px;
-}
 
 /* 响应式设计 */
 @media (max-width: 768px) {

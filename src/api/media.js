@@ -28,7 +28,10 @@ export const uploadMediaFile = (formData, config = {}) => {
  * 根据ID获取媒体资源
  * GET /media/{id}
  */
-export const getMediaById = createApiMethod('get', '/media/{id}')
+// export const getMediaById = createApiMethod('get', '/media/')
+export const getMediaById = (id) => {
+    return request.get(`/media/${id}`)
+}
 
 /**
  * 删除媒体资源

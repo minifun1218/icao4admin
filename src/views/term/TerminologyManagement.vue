@@ -162,21 +162,6 @@
         </el-table-column>
         <el-table-column prop="freqRank" label="频次排名" width="100" sortable="custom" />
         <el-table-column prop="source" label="来源" width="120" show-overflow-tooltip />
-        <el-table-column label="音频" width="80" align="center">
-          <template #default="scope">
-            <el-icon v-if="scope.row.hasAudioAsset" color="#67c23a">
-              <VideoPlay />
-            </el-icon>
-            <el-icon v-else color="#ddd">
-              <Mute />
-            </el-icon>
-          </template>
-        </el-table-column>
-        <el-table-column label="主题数" width="80" align="center">
-          <template #default="scope">
-            <el-badge :value="scope.row.topicCount || 0" type="info" />
-          </template>
-        </el-table-column>
         <el-table-column 
           prop="createdAt" 
           label="创建时间" 
@@ -542,8 +527,6 @@ import {
   Delete,
   Upload,
   Download,
-  VideoPlay,
-  Mute,
   UploadFilled,
   Operation
 } from '@element-plus/icons-vue'

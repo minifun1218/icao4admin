@@ -86,9 +86,66 @@ const router = createRouter({
             // 听力简答管理
             {
               path: '/listening-qa/dialogs',
-              name: 'LSADialogManagement',
+              name: 'listening-qa-dialogs',
               component: () => import('@/views/listening-qa/DialogManagement.vue'),
               meta: { title: '听力简答 - 对话管理' }
+            },
+            {
+              path: '/listening-qa/questions/:dialogId?',
+              name: 'listening-qa-questions',
+              component: () => import('@/views/listening-qa/QuestionManagement.vue'),
+              meta: { title: '听力简答 - 问题管理' }
+            },
+            // 模拟通话管理
+            {
+              path: '/atc-simulation/airports',
+              name: 'atc-airports',
+              component: () => import('@/views/atc-simulation/AirportManagement.vue'),
+              meta: { title: '模拟通话 - 机场管理' }
+            },
+            {
+              path: '/atc-simulation/scenarios',
+              name: 'atc-scenarios',
+              component: () => import('@/views/atc-simulation/ScenarioManagement.vue'),
+              meta: { title: '模拟通话 - 场景管理' }
+            },
+            {
+              path: '/atc-simulation/scenarios/:scenarioId/turns',
+              name: 'atc-turns',
+              component: () => import('@/views/atc-simulation/TurnManagement.vue'),
+              meta: { title: '模拟通话 - 轮次管理' }
+            },
+            // 口语能力面试管理
+            {
+              path: '/oral-interview/topics',
+              name: 'opi-topics',
+              component: () => import('@/views/opi/TopicManagement.vue'),
+              meta: { title: '口语能力面试 - 话题管理' }
+            },
+            {
+              path: '/oral-interview/questions',
+              name: 'opi-questions',
+              component: () => import('@/views/opi/QuestionManagement.vue'),
+              meta: { title: '口语能力面试 - 问题管理' }
+            },
+            // 考试管理
+            {
+              path: '/exam-modules',
+              name: 'ExamModuleManagement',
+              component: () => import('@/views/exam/ModuleManagement.vue'),
+              meta: { title: '考试管理 - 模块管理' }
+            },
+            {
+              path: '/exam-papers',
+              name: 'ExamPaperManagement',
+              component: () => import('@/views/exam/PaperManagement.vue'),
+              meta: { title: '考试管理 - 试卷管理' }
+            },
+            {
+              path: '/exam-results',
+              name: 'ExamResultManagement',
+              component: () => import('@/views/exam/ResultManagement.vue'),
+              meta: { title: '考试管理 - 成绩管理' }
             },
         {
           path: '/roles',

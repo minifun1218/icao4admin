@@ -66,9 +66,9 @@
             <el-select v-model="advancedSearchForm.cefrLevel" placeholder="选择等级" clearable>
               <el-option 
                 v-for="level in cefrLevels" 
-                :key="level" 
-                :label="level" 
-                :value="level" 
+                :key="level.value" 
+                :label="level.label" 
+                :value="level.value" 
               />
             </el-select>
           </el-form-item>
@@ -99,7 +99,7 @@
           <el-statistic title="有音频词汇" :value="statistics.withAudioCount || 0" />
         </el-col>
         <el-col :span="6">
-          <el-statistic title="高频词汇" :value="statistics.highFreqCount || 0" />
+          <el-statistic title="有音频词汇" :value="statistics.withAudioCount || 0" />
         </el-col>
       </el-row>
     </div>
@@ -149,16 +149,29 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="freqRank" label="频次排名" width="100" sortable="custom" />
-        <el-table-column prop="source" label="来源" width="120" show-overflow-tooltip />
         <el-table-column label="音频" width="80" align="center">
           <template #default="scope">
-            <el-icon v-if="scope.row.audioAssetId" color="#67c23a">
-              <VideoPlay />
-            </el-icon>
-            <el-icon v-else color="#ddd">
-              <Mute />
-            </el-icon>
+            <el-tooltip
+              v-if="scope.row.audioAssetId"
+              content="点击播放音频"
+              placement="top"
+            >
+              <el-button 
+                type="text" 
+                size="small"
+                @click="playAudio(scope.row)"
+                class="audio-play-btn"
+              >
+                <el-icon color="#67c23a" size="18">
+                  <VideoPlay />
+                </el-icon>
+              </el-button>
+            </el-tooltip>
+            <el-tooltip v-else content="暂无音频" placement="top">
+              <el-icon color="#ddd" size="18" class="no-audio-icon">
+                <Mute />
+              </el-icon>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column 
@@ -211,6 +224,25 @@
       width="800px"
       :close-on-click-modal="false"
     >
+      <!-- 词汇详情模式下的音频播放区域 -->
+      <div v-if="dialogMode === 'view' && currentVocab.audioAssetId" class="vocab-detail-audio">
+        <div class="audio-section-header">
+          <el-icon color="#67c23a"><VideoPlay /></el-icon>
+          <span class="audio-section-title">发音音频</span>
+        </div>
+        <div class="audio-player-container">
+          <audio 
+            ref="detailAudioPlayer"
+:src="currentAudioUrl"
+            controls
+            preload="metadata"
+            class="detail-audio-player"
+            @error="handleDetailAudioError"
+          >
+            您的浏览器不支持音频播放
+          </audio>
+        </div>
+      </div>
       <el-form
         ref="vocabForm"
         :model="currentVocab"
@@ -293,27 +325,11 @@
               <el-select v-model="currentVocab.cefrLevel" placeholder="选择等级" clearable>
                 <el-option 
                   v-for="level in cefrLevels" 
-                  :key="level" 
-                  :label="level" 
-                  :value="level" 
+                  :key="level.value" 
+                  :label="level.label" 
+                  :value="level.value" 
                 />
               </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="频次排名">
-              <el-input-number 
-                v-model="currentVocab.freqRank" 
-                :min="1" 
-                :max="999999"
-                placeholder="频次排名"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="来源">
-              <el-input v-model="currentVocab.source" placeholder="输入来源" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -336,19 +352,24 @@
               </el-button>
               <template #tip>
                 <div class="el-upload__tip">
-                  支持 MP3、WAV、OGG 格式，文件大小不超过 50MB
+                  支持 MP3、WAV、OGG、M4A、AAC 格式，文件大小不超过 {{ getMaxFileSizeText() }}
                 </div>
               </template>
             </el-upload>
             
             <!-- 音频预览播放器 -->
             <div v-if="currentAudioUrl || currentVocab.audioAssetId" class="audio-player">
+                <div class="audio-info">
+                <el-icon color="#67c23a"><VideoPlay /></el-icon>
+                <span class="audio-label">音频文件</span>
+              </div>
               <audio 
                 ref="audioPlayer"
                 :src="currentAudioUrl"
                 controls
                 preload="metadata"
                 style="width: 100%; margin-top: 10px;"
+                @error="handleAudioError"
               >
                 您的浏览器不支持音频播放
               </audio>
@@ -366,32 +387,6 @@
           </div>
         </el-form-item>
 
-        <!-- 扩展信息 (JSON字段) -->
-        <el-form-item label="同义词">
-          <el-input
-            v-model="synonymsText"
-            placeholder="输入同义词，用逗号分隔"
-            @blur="updateExtraJson"
-          />
-        </el-form-item>
-
-        <el-form-item label="反义词">
-          <el-input
-            v-model="antonymsText"
-            placeholder="输入反义词，用逗号分隔"
-            @blur="updateExtraJson"
-          />
-        </el-form-item>
-
-        <el-form-item label="备注">
-          <el-input
-            v-model="extraNotes"
-            type="textarea"
-            :rows="2"
-            placeholder="输入其他备注信息"
-            @blur="updateExtraJson"
-          />
-        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -477,6 +472,20 @@ import {
   getCEFRLevels,
   getPOSOptions
 } from '@/api/vocab'
+import {
+  uploadMediaFile,
+  getPreviewUrl,
+  getDownloadUrl,
+  getMediaById
+} from '@/api/media'
+import request from '@/utils/request'
+import { 
+  MEDIA_CONFIG, 
+  validateFileType, 
+  validateFileSize, 
+  getMaxFileSizeText, 
+  getSupportedTypesText 
+} from '@/utils/media-config'
 
 // 响应式数据
 const loading = ref(false)
@@ -490,8 +499,33 @@ const dialogMode = ref('view') // view, edit, create
 const vocabList = ref([])
 const selectedVocabs = ref([])
 const statistics = ref({})
-const cefrLevels = ref([])
-const posOptions = ref([])
+// CEFR等级列表（根据后台枚举）
+const cefrLevels = ref([
+  { value: 'A1', label: 'A1 (初级入门)' },
+  { value: 'A2', label: 'A2 (初级进阶)' },
+  { value: 'B1', label: 'B1 (中级入门)' },
+  { value: 'B2', label: 'B2 (中级进阶)' },
+  { value: 'C1', label: 'C1 (高级入门)' },
+  { value: 'C2', label: 'C2 (高级精通)' }
+])
+
+// 默认词性列表
+const posOptions = ref([
+  'n.', // 名词
+  'v.', // 动词
+  'adj.', // 形容词
+  'adv.', // 副词
+  'prep.', // 介词
+  'conj.', // 连词
+  'pron.', // 代词
+  'art.', // 冠词
+  'num.', // 数词
+  'int.', // 感叹词
+  'abbr.', // 缩写
+  'phr.', // 短语
+  'aux.', // 助动词
+  'modal' // 情态动词
+])
 
 // 分页
 const pagination = reactive({
@@ -525,10 +559,7 @@ const currentVocab = reactive({
   exampleEn: '',
   exampleZh: '',
   cefrLevel: '',
-  freqRank: null,
-  source: '',
-  audioAssetId: null,
-  extraJson: {}
+  audioAssetId: null
 })
 
 // 音频相关
@@ -536,10 +567,6 @@ const audioFileList = ref([])
 const currentAudioUrl = ref('')
 const currentAudioFile = ref(null)
 
-// 扩展信息字段
-const synonymsText = ref('')
-const antonymsText = ref('')
-const extraNotes = ref('')
 
 // 表单验证规则
 const vocabRules = {
@@ -603,17 +630,10 @@ const loadStatistics = async () => {
   }
 }
 
-const loadOptions = async () => {
-  try {
-    const [cefrResponse, posResponse] = await Promise.all([
-      getCEFRLevels(),
-      getPOSOptions()
-    ])
-    cefrLevels.value = cefrResponse.data
-    posOptions.value = posResponse.data
-  } catch (error) {
-    console.error('加载选项失败:', error)
-  }
+// 选项数据已经在组件中定义，无需从API加载
+const loadOptions = () => {
+  // CEFR等级和词性选项已经预定义
+  console.log('选项已预定义')
 }
 
 const showCreateDialog = () => {
@@ -622,18 +642,29 @@ const showCreateDialog = () => {
   dialogVisible.value = true
 }
 
-const handleView = (vocab) => {
+const handleView = async (vocab) => {
   dialogMode.value = 'view'
   Object.assign(currentVocab, vocab)
-  populateExtraFields(vocab)
-  loadAudioForVocab(vocab)
+  
+  // 异步加载音频URL
+  if (vocab.audioAssetId) {
+    try {
+      const audioUrl = await getAudioUrl(vocab)
+      currentAudioUrl.value = audioUrl
+    } catch (error) {
+      console.error('加载音频URL失败:', error)
+      currentAudioUrl.value = ''
+    }
+  } else {
+    currentAudioUrl.value = ''
+  }
+  
   dialogVisible.value = true
 }
 
 const handleEdit = (vocab) => {
   dialogMode.value = 'edit'
   Object.assign(currentVocab, vocab)
-  populateExtraFields(vocab)
   loadAudioForVocab(vocab)
   dialogVisible.value = true
 }
@@ -692,9 +723,6 @@ const handleSaveVocab = async () => {
   try {
     await vocabForm.value.validate()
     saveLoading.value = true
-    
-    // 更新扩展JSON字段
-    updateExtraJson()
     
     // 如果有新的音频文件，先上传音频
     if (currentAudioFile.value) {
@@ -817,21 +845,13 @@ const resetCurrentVocab = () => {
     exampleEn: '',
     exampleZh: '',
     cefrLevel: '',
-    freqRank: null,
-    source: '',
-    audioAssetId: null,
-    extraJson: {}
+  audioAssetId: null
   })
   
   // 重置音频相关状态
   audioFileList.value = []
   currentAudioUrl.value = ''
   currentAudioFile.value = null
-  
-  // 重置扩展信息字段
-  synonymsText.value = ''
-  antonymsText.value = ''
-  extraNotes.value = ''
 }
 
 const showBatchImportDialog = () => {
@@ -892,17 +912,17 @@ const handleAudioChange = (file) => {
 }
 
 const beforeAudioUpload = (file) => {
-  const isAudio = file.type.startsWith('audio/')
-  const isLt50M = file.size / 1024 / 1024 < 50
-
-  if (!isAudio) {
-    ElMessage.error('只能上传音频文件')
+  // 使用媒体配置进行验证
+  if (!validateFileType(file, 'audio')) {
+    ElMessage.error('不支持的音频文件类型，支持的格式：MP3、WAV、OGG、M4A、AAC')
     return false
   }
-  if (!isLt50M) {
-    ElMessage.error('音频文件大小不能超过 50MB')
+  
+  if (!validateFileSize(file)) {
+    ElMessage.error(`音频文件大小不能超过 ${getMaxFileSizeText()}`)
     return false
   }
+  
   return true
 }
 
@@ -918,70 +938,187 @@ const removeAudio = () => {
   }
 }
 
+// 音频加载错误处理
+const handleAudioError = (event) => {
+  console.error('音频加载失败:', event)
+  ElMessage.warning('音频文件加载失败，可能文件已损坏或不存在')
+}
+
+// 详情页面音频加载错误处理
+const handleDetailAudioError = (event) => {
+  console.error('详情音频加载失败:', event)
+  ElMessage.warning('音频文件加载失败')
+}
+
+// 媒体URL缓存机制
+const mediaUrlCache = reactive(new Map())
+
+// 获取带缓存的媒体URL
+const getCachedMediaUrl = (mediaAsset, type = 'preview') => {
+  if (!mediaAsset) return null
+  
+  const cacheKey = `${mediaAsset.id || mediaAsset.filename}_${type}`
+  
+  if (mediaUrlCache.has(cacheKey)) {
+    return mediaUrlCache.get(cacheKey)
+  }
+  
+  let url = null
+  switch (type) {
+    case 'preview':
+      url = getPreviewUrl(mediaAsset)
+      break
+    case 'thumbnail':
+      url = getPreviewUrl(mediaAsset)
+      break
+    case 'download':
+      url = getDownloadUrl(mediaAsset)
+      break
+    default:
+      url = getPreviewUrl(mediaAsset)
+  }
+  
+  if (url) {
+    mediaUrlCache.set(cacheKey, url)
+  }
+  
+  return url
+}
+
+// 表格中播放音频
+const playAudio = async (vocab) => {
+  console.log('🎵 尝试播放音频，词汇:', vocab.headword, '音频ID:', vocab.audioAssetId)
+  
+  if (!vocab.audioAssetId) {
+    ElMessage.warning('该词汇没有音频文件')
+    return
+  }
+  
+  try {
+    // 通过后端API获取媒体资源信息
+    console.log('🎵 调用后端API获取媒体资源:', vocab.audioAssetId)
+    // 直接使用request调用，因为createApiMethod不支持路径参数替换
+    const response = await request.get(`/media/${vocab.audioAssetId}`)
+
+    console.log('🎵 后端媒体资源响应:', response.data, '123123')
+
+
+    const previewUrl = response.data.data.previewUrl;
+    console.log('🎵 后端返回的预览URL:', previewUrl)
+
+    // 将相对路径拼接成完整路径
+    let audioUrl = null
+    if (previewUrl) {
+      if (previewUrl.startsWith('http')) {
+        // 已经是完整URL
+        audioUrl = previewUrl
+      } else {
+        // 相对路径，需要拼接API基础路径
+        const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+        audioUrl = previewUrl.startsWith('/') ? `${baseURL}${previewUrl}` : `${baseURL}/${previewUrl}`
+      }
+    }
+    
+    console.log('🎵 构建的完整音频URL:', audioUrl)
+    
+    if (!audioUrl) {
+      ElMessage.error('无法获取音频URL')
+      return
+    }
+    
+    // 创建临时音频元素播放
+    const audio = new Audio(audioUrl)
+    
+    // 添加加载事件监听
+    audio.addEventListener('loadstart', () => {
+      console.log('🎵 开始加载音频')
+    })
+    
+    audio.addEventListener('canplay', () => {
+      console.log('🎵 音频可以播放')
+    })
+    
+    audio.addEventListener('error', (e) => {
+      console.error('🎵 音频加载错误:', e)
+      ElMessage.error('音频文件加载失败')
+    })
+    
+    // 尝试播放
+    audio.play().then(() => {
+      console.log('🎵 音频播放开始')
+      ElMessage.success('正在播放音频')
+    }).catch(error => {
+      console.error('🎵 音频播放失败:', error)
+      ElMessage.error('音频播放失败: ' + error.message)
+    })
+    
+  } catch (error) {
+    console.error('🎵 调用后端API失败:', error)
+    ElMessage.error('获取音频资源失败: ' + (error.message || error))
+  }
+}
+
+// 获取音频URL的辅助方法（用于详情页面）
+const getAudioUrl = async (vocab) => {
+  console.log('🎵 getAudioUrl 被调用，词汇:', vocab.headword, '音频ID:', vocab.audioAssetId)
+  
+  if (!vocab.audioAssetId) {
+    console.log('🎵 没有音频ID，返回null')
+    return null
+  }
+  
+  try {
+    // 通过后端API获取媒体资源信息
+    const response = await request.get(`/media/${vocab.audioAssetId}`)
+    
+    console.log('🎵 getAudioUrl - 后端响应:', response.data)
+    
+    const previewUrl = response.data.data?.previewUrl
+    if (!previewUrl) {
+      console.error('🎵 后端未返回previewUrl')
+      return null
+    }
+    
+    // 将相对路径拼接成完整路径
+    let audioUrl = null
+    if (previewUrl.startsWith('http')) {
+      // 已经是完整URL
+      audioUrl = previewUrl
+    } else {
+      // 相对路径，需要拼接API基础路径
+      const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+      audioUrl = previewUrl.startsWith('/') ? `${baseURL}${previewUrl}` : `${baseURL}/${previewUrl}`
+    }
+    
+    console.log('🎵 生成的音频URL:', audioUrl)
+    return audioUrl
+    
+  } catch (error) {
+    console.error('🎵 获取音频URL失败:', error)
+    return null
+  }
+}
+
 const loadAudioForVocab = async (vocab) => {
   if (vocab.audioAssetId) {
-    // 如果有音频资源ID，构建音频URL
-    // 这里需要根据实际的媒体资源服务来构建URL
-    currentAudioUrl.value = `/api/media/audio/${vocab.audioAssetId}`
-    audioFileList.value = []
+    try {
+      // 通过后端API获取音频URL
+      const audioUrl = await getAudioUrl(vocab)
+      currentAudioUrl.value = audioUrl
+      audioFileList.value = []
+      
+      console.log('加载词汇音频URL:', currentAudioUrl.value)
+    } catch (error) {
+      console.error('加载音频失败:', error)
+      currentAudioUrl.value = ''
+      audioFileList.value = []
+    }
   } else {
     currentAudioUrl.value = ''
     audioFileList.value = []
   }
 }
 
-// 扩展信息处理方法
-const populateExtraFields = (vocab) => {
-  if (vocab.extraJson) {
-    // 填充同义词
-    if (vocab.extraJson.synonyms && Array.isArray(vocab.extraJson.synonyms)) {
-      synonymsText.value = vocab.extraJson.synonyms.join(', ')
-    }
-    
-    // 填充反义词
-    if (vocab.extraJson.antonyms && Array.isArray(vocab.extraJson.antonyms)) {
-      antonymsText.value = vocab.extraJson.antonyms.join(', ')
-    }
-    
-    // 填充备注
-    if (vocab.extraJson.notes) {
-      extraNotes.value = vocab.extraJson.notes
-    }
-  }
-}
-
-const updateExtraJson = () => {
-  if (!currentVocab.extraJson) {
-    currentVocab.extraJson = {}
-  }
-  
-  // 更新同义词
-  if (synonymsText.value.trim()) {
-    currentVocab.extraJson.synonyms = synonymsText.value
-      .split(',')
-      .map(word => word.trim())
-      .filter(word => word.length > 0)
-  } else {
-    delete currentVocab.extraJson.synonyms
-  }
-  
-  // 更新反义词
-  if (antonymsText.value.trim()) {
-    currentVocab.extraJson.antonyms = antonymsText.value
-      .split(',')
-      .map(word => word.trim())
-      .filter(word => word.length > 0)
-  } else {
-    delete currentVocab.extraJson.antonyms
-  }
-  
-  // 更新备注
-  if (extraNotes.value.trim()) {
-    currentVocab.extraJson.notes = extraNotes.value.trim()
-  } else {
-    delete currentVocab.extraJson.notes
-  }
-}
 
 // 上传音频文件
 const uploadAudioFile = async () => {
@@ -990,21 +1127,53 @@ const uploadAudioFile = async () => {
   }
   
   try {
+    // 验证文件类型和大小
+    if (!validateFileType(currentAudioFile.value, 'audio')) {
+      ElMessage.error('不支持的音频文件类型')
+      return null
+    }
+    
+    if (!validateFileSize(currentAudioFile.value)) {
+      ElMessage.error(`文件大小不能超过 ${getMaxFileSizeText()}`)
+      return null
+    }
+    
     const formData = new FormData()
     formData.append('file', currentAudioFile.value)
     formData.append('type', 'audio')
     formData.append('category', 'vocabulary')
+    formData.append('title', `${currentVocab.headword} 发音`)
+    formData.append('description', `词汇 "${currentVocab.headword}" 的发音音频`)
     
-    // 这里需要调用媒体上传API
-    // const response = await uploadMediaFile(formData)
-    // return response.data.id
+    console.log('开始上传音频文件:', currentAudioFile.value.name)
+    const response = await uploadMediaFile(formData)
     
-    // 暂时返回一个模拟的ID
-    ElMessage.info('音频上传功能待后端媒体服务完善')
-    return null
+    console.log('音频上传响应:', response)
+    
+    // 检查多种可能的响应格式
+    let mediaData = null
+    if (response && response.data) {
+      if (response.data.data && response.data.data.id) {
+        // 格式: { data: { data: { id: ... } } }
+        mediaData = response.data.data
+      } else if (response.data.id) {
+        // 格式: { data: { id: ... } }
+        mediaData = response.data
+      }
+    }
+    
+    if (mediaData && mediaData.id) {
+      console.log('音频上传成功，ID:', mediaData.id)
+      ElMessage.success('音频上传成功')
+      return mediaData.id
+    } else {
+      console.error('音频上传响应格式异常:', response)
+      ElMessage.error('音频上传失败：响应格式异常')
+      return null
+    }
   } catch (error) {
     console.error('音频上传失败:', error)
-    ElMessage.error('音频上传失败')
+    ElMessage.error('音频上传失败: ' + (error.message || error))
     return null
   }
 }
@@ -1016,11 +1185,13 @@ onMounted(() => {
   loadOptions()
 })
 
+
 // 模板引用
 const vocabForm = ref(null)
 const uploadRef = ref(null)
 const audioUpload = ref(null)
 const audioPlayer = ref(null)
+const detailAudioPlayer = ref(null)
 </script>
 
 <style scoped>
@@ -1140,6 +1311,97 @@ const audioPlayer = ref(null)
   display: flex;
   justify-content: flex-end;
   margin-top: 8px;
+}
+
+.audio-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: #f0f9ff;
+  border-radius: 4px;
+  border: 1px solid #e1f5fe;
+}
+
+.audio-label {
+  font-size: 14px;
+  color: #1976d2;
+  font-weight: 500;
+}
+
+/* 表格中的音频播放按钮 */
+.audio-play-btn {
+  padding: 6px !important;
+  min-height: auto !important;
+  border-radius: 50%;
+  transition: all 0.3s;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background-color: rgba(103, 194, 58, 0.1);
+}
+
+.audio-play-btn:hover {
+  background-color: rgba(103, 194, 58, 0.2);
+  border-color: #67c23a;
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.3);
+}
+
+.audio-play-btn:active {
+  transform: scale(1.05);
+  background-color: rgba(103, 194, 58, 0.3);
+}
+
+/* 无音频图标样式 */
+.no-audio-icon {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 词汇详情中的音频区域 */
+.vocab-detail-audio {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.audio-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.audio-section-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #303133;
+}
+
+.audio-player-container {
+  padding: 8px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #dcdfe6;
+}
+
+.detail-audio-player {
+  width: 100%;
+  height: 40px;
+  outline: none;
+}
+
+.detail-audio-player::-webkit-media-controls-panel {
+  background-color: #f5f7fa;
+}
+
+.detail-audio-player::-webkit-media-controls-play-button,
+.detail-audio-player::-webkit-media-controls-pause-button {
+  background-color: #409eff;
+  border-radius: 50%;
 }
 
 /* 音频预览播放器样式 */

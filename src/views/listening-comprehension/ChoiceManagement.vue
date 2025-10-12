@@ -523,6 +523,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Plus,
@@ -556,6 +557,9 @@ import {
   getQuestions,
   getQuestionById
 } from '@/api/listening-mcq'
+
+// 路由
+const route = useRoute()
 
 // 响应式数据
 const loading = ref(false)
@@ -1066,8 +1070,16 @@ const removeCustomChoice = (index) => {
 
 // 生命周期
 onMounted(async () => {
-  loadChoiceList()
   await loadQuestions()
+  
+  // 检查URL参数中是否有questionId，如果有则自动过滤
+  const questionIdFromQuery = route.query.questionId
+  if (questionIdFromQuery) {
+    filterQuestion.value = parseInt(questionIdFromQuery)
+    ElMessage.success(`已自动筛选题目 ID: ${questionIdFromQuery}`)
+  }
+  
+  loadChoiceList()
   
   // 调试：检查题目列表是否正确加载
   setTimeout(() => {
