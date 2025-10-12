@@ -14,13 +14,6 @@
           添加选项
         </el-button>
         <el-button 
-          type="success" 
-          @click="showBatchCreateDialog"
-        >
-          <el-icon><DocumentAdd /></el-icon>
-          批量创建
-        </el-button>
-        <el-button 
           type="danger" 
           :disabled="selectedChoices.length === 0"
           @click="handleBatchDelete"
@@ -44,7 +37,7 @@
           clearable
           filterable
           style="width: 200px; margin-right: 12px"
-          @change="handleFilterChange"
+          @change="(val) => { console.log('📋 题目下拉框变化:', val); handleFilterChange(); }"
         >
           <el-option label="全部题目" value="" />
           <el-option 
@@ -54,43 +47,21 @@
             :value="question.id" 
           />
         </el-select>
-        <el-select
-          v-model="filterLabel"
-          placeholder="选项标签"
-          clearable
-          style="width: 120px; margin-right: 12px"
-          @change="handleFilterChange"
-        >
-          <el-option label="全部标签" value="" />
-          <el-option 
-            v-for="label in choiceLabels" 
-            :key="label.value" 
-            :label="label.label" 
-            :value="label.value" 
-          />
-        </el-select>
-        <el-select
-          v-model="filterCorrect"
-          placeholder="答案类型"
-          clearable
-          style="width: 120px; margin-right: 12px"
-          @change="handleFilterChange"
-        >
-          <el-option label="全部" value="" />
-          <el-option label="正确答案" value="true" />
-          <el-option label="错误答案" value="false" />
-        </el-select>
         <el-input
           v-model="searchKeyword"
           placeholder="搜索选项内容..."
           style="width: 200px"
           clearable
           @keyup.enter="handleSearch"
+          @clear="handleSearch"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
+        <el-button type="primary" @click="handleSearch" style="margin-left: 8px">
+          搜索
+        </el-button>
       </div>
     </div>
 
@@ -154,27 +125,36 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right" align="center">
           <template #default="scope">
-            <el-button size="small" @click="handleView(scope.row)">
-              <el-icon><View /></el-icon>
-              查看
-            </el-button>
-            <el-button size="small" type="primary" @click="handleEdit(scope.row)">
-              <el-icon><Edit /></el-icon>
-              编辑
-            </el-button>
-            <el-button 
-              size="small" 
-              :type="scope.row.isCorrect ? 'warning' : 'success'"
-              @click="handleToggleCorrect(scope.row)"
-            >
-              {{ scope.row.isCorrect ? '取消正确' : '设为正确' }}
-            </el-button>
-            <el-button size="small" type="danger" @click="handleDelete(scope.row)">
-              <el-icon><Delete /></el-icon>
-              删除
-            </el-button>
+            <div class="action-buttons">
+              <el-tooltip content="查看" placement="top">
+                <el-button size="small" circle @click="handleView(scope.row)">
+                  <el-icon><View /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="编辑" placement="top">
+                <el-button size="small" circle type="primary" @click="handleEdit(scope.row)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip :content="scope.row.isCorrect ? '取消正确' : '设为正确'" placement="top">
+                <el-button 
+                  size="small" 
+                  circle
+                  :type="scope.row.isCorrect ? 'warning' : 'success'"
+                  @click="handleToggleCorrect(scope.row)"
+                >
+                  <el-icon v-if="scope.row.isCorrect"><Close /></el-icon>
+                  <el-icon v-else><Check /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button size="small" circle type="danger" @click="handleDelete(scope.row)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -533,7 +513,8 @@ import {
   View,
   Edit,
   CopyDocument,
-  DocumentAdd
+  Check,
+  Close
 } from '@element-plus/icons-vue'
 import {
   getAllChoices,
@@ -582,8 +563,6 @@ const currentQuestionDetail = ref(null)
 
 const searchKeyword = ref('')
 const filterQuestion = ref('')
-const filterLabel = ref('')
-const filterCorrect = ref('')
 
 const pagination = reactive({
   page: 1,
@@ -653,21 +632,20 @@ const loadChoiceList = async () => {
       size: pagination.size
     }
     
+    // 添加过滤条件
     if (filterQuestion.value) {
       params.questionId = filterQuestion.value
-    }
-    if (filterLabel.value) {
-      params.label = filterLabel.value
-    }
-    if (filterCorrect.value !== '') {
-      params.isCorrect = filterCorrect.value === 'true'
+      console.log('📋 按题目过滤，题目ID:', filterQuestion.value)
     }
     
+    console.log('📋 加载选项列表，参数:', params)
     const response = await getAllChoices(params)
+    console.log('📋 选项列表响应:', response)
     
     if (response && response.data) {
       choiceList.value = response.data.data.content || []
       pagination.total = response.data.data.totalElements || 0
+      console.log('📋 加载成功，选项数量:', choiceList.value.length)
     }
   } catch (error) {
     ElMessage.error('加载选项列表失败')
@@ -959,9 +937,22 @@ const handleSearch = async () => {
   }
 }
 
-const handleFilterChange = () => {
+const handleFilterChange = async () => {
+  console.log('🔄 过滤条件变化:', {
+    filterQuestion: filterQuestion.value
+  })
+  
+  // 重置到第一页
   pagination.page = 1
-  loadChoiceList()
+  
+  // 立即清空当前列表，显示加载状态
+  choiceList.value = []
+  
+  // 延迟一小段时间，让用户看到loading效果
+  await new Promise(resolve => setTimeout(resolve, 100))
+  
+  // 加载新数据
+  await loadChoiceList()
 }
 
 const handleSelectionChange = (selection) => {
@@ -980,7 +971,15 @@ const handleCurrentChange = (page) => {
 }
 
 const refreshList = () => {
+  // 清空搜索和过滤条件
+  searchKeyword.value = ''
+  filterQuestion.value = ''
+  pagination.page = 1
+  
+  // 重新加载列表
   loadChoiceList()
+  
+  ElMessage.success('列表已刷新')
 }
 
 const showQuestionDetail = async (questionId) => {
@@ -1070,22 +1069,34 @@ const removeCustomChoice = (index) => {
 
 // 生命周期
 onMounted(async () => {
+  console.log('📋 ChoiceManagement 页面加载开始')
+  
+  // 先加载题目列表
   await loadQuestions()
+  console.log('📋 题目列表加载完成，数量:', questions.value.length)
   
   // 检查URL参数中是否有questionId，如果有则自动过滤
   const questionIdFromQuery = route.query.questionId
   if (questionIdFromQuery) {
     filterQuestion.value = parseInt(questionIdFromQuery)
+    console.log('📋 从URL获取题目ID:', filterQuestion.value)
     ElMessage.success(`已自动筛选题目 ID: ${questionIdFromQuery}`)
   }
   
-  loadChoiceList()
+  // 加载选项列表
+  await loadChoiceList()
   
   // 调试：检查题目列表是否正确加载
   setTimeout(() => {
-    console.log('onMounted后的题目列表状态:', questions.value)
+    console.log('📋 页面加载完成检查:')
+    console.log('  - 题目列表:', questions.value)
+    console.log('  - 选项列表:', choiceList.value)
+    console.log('  - 当前过滤条件:', {
+      filterQuestion: filterQuestion.value
+    })
     if (questions.value.length === 0) {
-      console.warn('题目列表为空，可能是API接口问题或数据结构不匹配')
+      console.warn('⚠️ 题目列表为空，请检查API接口')
+      ElMessage.warning('题目列表为空，请先添加题目')
     }
   }, 1000)
   
@@ -1359,5 +1370,18 @@ onMounted(async () => {
   align-items: center;
   padding: 40px 0;
   color: #606266;
+}
+
+/* 操作按钮样式 */
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-buttons .el-button.is-circle {
+  padding: 6px;
 }
 </style>

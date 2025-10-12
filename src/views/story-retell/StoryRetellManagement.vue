@@ -56,13 +56,6 @@
           添加题目
         </el-button>
         <el-button 
-          type="success" 
-          @click="showImportDialog"
-        >
-          <el-icon><Upload /></el-icon>
-          批量导入
-        </el-button>
-        <el-button 
           type="danger" 
           :disabled="selectedItems.length === 0"
           @click="handleBatchDelete"
@@ -167,27 +160,30 @@
             {{ formatDateTime(scope.row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right" align="center">
           <template #default="scope">
-            <el-button size="small" @click="handleView(scope.row)">
-              <el-icon><View /></el-icon>
-              查看
-            </el-button>
-            <el-button size="small" type="primary" @click="handleEdit(scope.row)">
-              <el-icon><Edit /></el-icon>
-              编辑
-            </el-button>
-            <el-button size="small" type="success" @click="handleCopy(scope.row)">
-              <el-icon><CopyDocument /></el-icon>
-              复制
-            </el-button>
-            <el-button size="small" type="warning" @click="viewResponses(scope.row.id)">
-              回答记录
-            </el-button>
-            <el-button size="small" type="danger" @click="handleDelete(scope.row)">
-              <el-icon><Delete /></el-icon>
-              删除
-            </el-button>
+            <div class="action-buttons">
+              <el-tooltip content="查看" placement="top">
+                <el-button size="small" circle @click="handleView(scope.row)">
+                  <el-icon><View /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="编辑" placement="top">
+                <el-button size="small" circle type="primary" @click="handleEdit(scope.row)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="复制" placement="top">
+                <el-button size="small" circle type="success" @click="handleCopy(scope.row)">
+                  <el-icon><CopyDocument /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button size="small" circle type="danger" @click="handleDelete(scope.row)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -219,34 +215,14 @@
         :rules="itemRules"
         label-width="120px"
       >
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="题目标题" prop="title">
-              <el-input
-                v-model="currentItem.title"
-                placeholder="请输入题目标题"
-                maxlength="200"
-                show-word-limit
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="所属模块" prop="moduleId">
-              <el-select 
-                v-model="currentItem.moduleId" 
-                placeholder="请选择模块" 
-                style="width: 100%"
-              >
-                <el-option 
-                  v-for="module in modules" 
-                  :key="module.id" 
-                  :label="module.name" 
-                  :value="module.id" 
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-form-item label="题目标题" prop="title">
+          <el-input
+            v-model="currentItem.title"
+            placeholder="请输入题目标题"
+            maxlength="200"
+            show-word-limit
+          />
+        </el-form-item>
 
         <el-row :gutter="20">
           <el-col :span="12">
@@ -277,14 +253,13 @@
           <div class="audio-upload">
             <el-upload
               ref="audioUploadRef"
+              :auto-upload="false"
+              :on-change="handleAudioChange"
               :before-upload="beforeAudioUpload"
-              :on-success="handleAudioSuccess"
-              :on-error="handleAudioError"
               :file-list="audioFileList"
+              v-model:file-list="audioFileList"
               :limit="1"
               accept="audio/*"
-              action="#"
-              :http-request="uploadAudio"
             >
               <el-button type="primary">
                 <el-icon><Upload /></el-icon>
@@ -292,15 +267,34 @@
               </el-button>
               <template #tip>
                 <div class="el-upload__tip">
-                  支持mp3、wav格式，文件大小不超过50MB
+                  支持mp3、wav格式，文件大小不超过50MB（选择后点击创建按钮时上传）
                 </div>
               </template>
             </el-upload>
-            <div v-if="currentItem.audioAssetId" class="audio-preview">
-              <audio controls style="width: 100%; margin-top: 10px">
-                <source :src="getAudioUrl(currentItem.audioAssetId)" type="audio/mpeg">
+            
+            <!-- 音频预览 -->
+            <div v-if="currentAudioUrl || currentItem.audioAssetId" class="audio-preview">
+              <div class="audio-info">
+                <el-icon color="#67c23a"><VideoPlay /></el-icon>
+                <span class="audio-label">音频文件</span>
+              </div>
+              <audio 
+                :src="currentAudioUrl || getAudioUrl(currentItem.audioAssetId)" 
+                controls 
+                style="width: 100%; margin-top: 10px"
+              >
                 您的浏览器不支持音频播放
               </audio>
+              <div class="audio-actions">
+                <el-button 
+                  size="small" 
+                  type="danger" 
+                  @click="removeAudio"
+                  style="margin-top: 8px;"
+                >
+                  移除音频
+                </el-button>
+              </div>
             </div>
           </div>
         </el-form-item>
@@ -498,6 +492,8 @@ const currentItem = reactive(generateRetellItemTemplate())
 
 const audioFileList = ref([])
 const importFileList = ref([])
+const currentAudioUrl = ref('')
+const currentAudioFile = ref(null)
 
 const importOptions = reactive({
   skipDuplicates: true,
@@ -516,9 +512,6 @@ const itemRules = {
     { required: true, message: '请输入题目标题', trigger: 'blur' },
     { max: 200, message: '题目标题不能超过200个字符', trigger: 'blur' }
   ],
-  moduleId: [
-    { required: true, message: '请选择所属模块', trigger: 'change' }
-  ],
   audioDurationSec: [
     { required: true, message: '请输入音频时长', trigger: 'blur' },
     { type: 'number', min: 1, max: 3600, message: '音频时长应在1-3600秒之间', trigger: 'blur' }
@@ -526,9 +519,6 @@ const itemRules = {
   answerSeconds: [
     { required: true, message: '请输入答题时长', trigger: 'blur' },
     { type: 'number', min: 30, max: 1800, message: '答题时长应在30-1800秒之间', trigger: 'blur' }
-  ],
-  audioAssetId: [
-    { required: true, message: '请上传音频文件', trigger: 'change' }
   ]
 }
 
@@ -609,6 +599,8 @@ const showCreateDialog = async () => {
   isEditing.value = false
   Object.assign(currentItem, generateRetellItemTemplate())
   audioFileList.value = []
+  currentAudioFile.value = null
+  currentAudioUrl.value = ''
   
   // 确保模块列表是最新的
   if (modules.value.length === 0) {
@@ -638,12 +630,13 @@ const handleEdit = async (item) => {
     if (response && response.data) {
       Object.assign(currentItem, response.data.data)
       
-      // 设置音频文件列表
+      // 清空新上传的音频
+      currentAudioFile.value = null
+      currentAudioUrl.value = ''
+      
+      // 如果有现有音频，显示但不作为新上传文件
       if (currentItem.audioAssetId) {
-        audioFileList.value = [{
-          name: `audio_${currentItem.audioAssetId}.mp3`,
-          url: getAudioUrl(currentItem.audioAssetId)
-        }]
+        audioFileList.value = []
       } else {
         audioFileList.value = []
       }
@@ -721,21 +714,78 @@ const handleSaveItem = async () => {
   try {
     await itemFormRef.value.validate()
     
-    // 验证题目数据
-    const errors = validateRetellItemData(currentItem)
-    if (errors.length > 0) {
-      ElMessage.error(errors[0])
+    saveLoading.value = true
+    
+    // 创建新题目时必须有音频文件
+    if (!isEditing.value && !currentAudioFile.value) {
+      ElMessage.error('请选择音频文件')
+      saveLoading.value = false
       return
     }
     
-    saveLoading.value = true
+    console.log('准备保存题目，数据:', currentItem)
     
     if (isEditing.value) {
+      // 编辑模式：如果有新音频文件，先上传再更新
+      if (currentAudioFile.value) {
+        console.log('编辑模式：上传新音频文件...')
+        const audioId = await uploadAudioFile()
+        
+        if (audioId) {
+          currentItem.audioAssetId = audioId
+          console.log('新音频ID已设置:', audioId)
+        } else {
+          ElMessage.error('音频上传失败，请重试')
+          saveLoading.value = false
+          return
+        }
+      } else if (!currentItem.audioAssetId) {
+        ElMessage.error('请选择音频文件')
+        saveLoading.value = false
+        return
+      }
+      
+      // 更新题目
       await updateRetellItem(currentItem.id, currentItem)
       ElMessage.success('题目更新成功')
     } else {
-      await createRetellItem(currentItem)
-      ElMessage.success('题目创建成功')
+      // 创建模式：先上传音频获取ID，再创建题目
+      console.log('创建模式：开始上传音频文件...')
+      
+      let uploadedAudioId = null
+      
+      try {
+        // 先上传音频文件
+        uploadedAudioId = await uploadAudioFile()
+        
+        if (!uploadedAudioId) {
+          ElMessage.error('音频上传失败，请重试')
+          saveLoading.value = false
+          return
+        }
+        
+        console.log('音频上传成功，ID:', uploadedAudioId)
+        
+        // 设置音频ID
+        currentItem.audioAssetId = uploadedAudioId
+        
+        // 创建题目记录
+        console.log('创建题目记录，包含音频ID:', uploadedAudioId)
+        const createResponse = await createRetellItem(currentItem)
+        console.log('题目创建响应:', createResponse)
+        
+        ElMessage.success('题目创建成功')
+        
+      } catch (createError) {
+        console.error('创建题目失败:', createError)
+        
+        // 如果题目创建失败但音频已上传
+        if (uploadedAudioId) {
+          ElMessage.error('题目创建失败。音频已上传到媒体库（ID: ' + uploadedAudioId + '），但未关联到题目')
+        }
+        
+        throw createError
+      }
     }
     
     dialogVisible.value = false
@@ -807,6 +857,16 @@ const viewResponses = (itemId) => {
 }
 
 // 音频上传相关
+const handleAudioChange = (file) => {
+  console.log('音频文件选择:', file)
+  currentAudioFile.value = file.raw
+  if (file.raw) {
+    currentAudioUrl.value = URL.createObjectURL(file.raw)
+  }
+  // 更新文件列表显示
+  audioFileList.value = [file]
+}
+
 const beforeAudioUpload = (file) => {
   const isAudio = file.type.startsWith('audio/')
   const isLt50M = file.size / 1024 / 1024 < 50
@@ -822,33 +882,63 @@ const beforeAudioUpload = (file) => {
   return true
 }
 
-const uploadAudio = async (options) => {
+const uploadAudioFile = async () => {
+  if (!currentAudioFile.value) {
+    return null
+  }
+  
   try {
-    const response = await uploadQuestionAudio(
-      options.file, 
-      currentItem.id, 
-      'medium'
-    )
+    console.log('开始上传音频文件:', currentAudioFile.value.name)
     
+    const formData = new FormData()
+    formData.append('file', currentAudioFile.value)
+    formData.append('type', 'audio')
+    formData.append('category', 'story-retell')
+    formData.append('title', `${currentItem.title} 音频`)
+    formData.append('description', `故事复述题目 "${currentItem.title}" 的音频文件`)
+    
+    // 使用媒体上传API
+    const { uploadMediaFile } = await import('@/api/media')
+    const response = await uploadMediaFile(formData)
+    
+    console.log('音频上传响应:', response)
+    
+    // 检查多种可能的响应格式
+    let mediaData = null
     if (response && response.data) {
-      currentItem.audioAssetId = response.data.audioAssetId
-      options.onSuccess(response.data)
+      if (response.data.data && response.data.data.id) {
+        mediaData = response.data.data
+      } else if (response.data.id) {
+        mediaData = response.data
+      }
+    }
+    
+    if (mediaData && mediaData.id) {
+      console.log('音频上传成功，ID:', mediaData.id)
+      ElMessage.success('音频上传成功')
+      return mediaData.id
+    } else {
+      console.error('音频上传响应格式异常:', response)
+      ElMessage.error('音频上传失败：响应格式异常')
+      return null
     }
   } catch (error) {
-    options.onError(error)
+    console.error('音频上传失败:', error)
+    ElMessage.error('音频上传失败: ' + (error.message || error))
+    return null
   }
 }
 
-const handleAudioSuccess = (response) => {
-  ElMessage.success('音频上传成功')
-  audioFileList.value = [{
-    name: response.filename,
-    url: response.url
-  }]
-}
-
-const handleAudioError = () => {
-  ElMessage.error('音频上传失败')
+const removeAudio = () => {
+  currentAudioFile.value = null
+  currentAudioUrl.value = ''
+  audioFileList.value = []
+  currentItem.audioAssetId = null
+  
+  // 清空音频上传组件
+  if (audioUploadRef.value) {
+    audioUploadRef.value.clearFiles()
+  }
 }
 
 // 导入相关
@@ -965,6 +1055,13 @@ const resetForm = () => {
   }
   Object.assign(currentItem, generateRetellItemTemplate())
   audioFileList.value = []
+  currentAudioFile.value = null
+  currentAudioUrl.value = ''
+  
+  // 清空音频上传组件
+  if (audioUploadRef.value) {
+    audioUploadRef.value.clearFiles()
+  }
 }
 
 // 生命周期
@@ -1129,6 +1226,24 @@ onMounted(() => {
   border: 1px solid #e9ecef;
 }
 
+.audio-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.audio-label {
+  color: #303133;
+}
+
+.audio-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .import-section {
   padding: 16px 0;
 }
@@ -1141,5 +1256,17 @@ onMounted(() => {
   display: flex;
   gap: 20px;
   flex-wrap: wrap;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-buttons .el-button.is-circle {
+  padding: 6px;
 }
 </style>

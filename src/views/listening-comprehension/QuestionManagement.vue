@@ -121,29 +121,34 @@
             {{ formatDateTime(scope.row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="340" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right" align="center">
           <template #default="scope">
             <div class="action-buttons">
-              <el-button size="small" @click="handleView(scope.row)">
-                <el-icon><View /></el-icon>
-                查看
-              </el-button>
-              <el-button size="small" type="primary" @click="handleEdit(scope.row)">
-                <el-icon><Edit /></el-icon>
-                编辑
-              </el-button>
-              <el-button size="small" @click="handleCopy(scope.row)">
-                <el-icon><CopyDocument /></el-icon>
-                复制
-              </el-button>
-              <el-button size="small" type="success" @click="handleChoices(scope.row)">
-                <el-icon><List /></el-icon>
-                选项
-              </el-button>
-              <el-button size="small" type="danger" @click="handleDelete(scope.row)">
-                <el-icon><Delete /></el-icon>
-                删除
-              </el-button>
+              <el-tooltip content="查看" placement="top">
+                <el-button size="small" circle @click="handleView(scope.row)">
+                  <el-icon><View /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="编辑" placement="top">
+                <el-button size="small" circle type="primary" @click="handleEdit(scope.row)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="复制" placement="top">
+                <el-button size="small" circle type="success" @click="handleCopy(scope.row)">
+                  <el-icon><CopyDocument /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="选项" placement="top">
+                <el-button size="small" circle type="warning" @click="handleChoices(scope.row)">
+                  <el-icon><List /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button size="small" circle type="danger" @click="handleDelete(scope.row)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </el-tooltip>
             </div>
           </template>
         </el-table-column>
@@ -1188,14 +1193,14 @@ onMounted(() => {
 /* 操作按钮样式 */
 .action-buttons {
   display: flex;
+  gap: 6px;
   flex-wrap: nowrap;
-  gap: 4px;
   align-items: center;
+  justify-content: center;
 }
 
-.action-buttons .el-button {
-  margin: 0;
-  padding: 5px 8px;
+.action-buttons .el-button.is-circle {
+  padding: 6px;
 }
 
 /* 选项弹窗样式 */

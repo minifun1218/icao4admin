@@ -516,11 +516,6 @@ export const validateRetellItemData = (item) => {
   if (item.title && item.title.length > 200) {
     errors.push('题目标题长度不能超过200个字符')
   }
-  
-  if (!item.moduleId) {
-    errors.push('必须选择所属模块')
-  }
-  
   if (!item.audioAssetId) {
     errors.push('必须上传音频文件')
   }
