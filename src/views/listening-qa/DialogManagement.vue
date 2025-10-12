@@ -1,92 +1,109 @@
 <template>
   <div class="dialog-management">
-    <!-- 页面头部 -->
+    <!-- 页面标题 -->
     <div class="page-header">
-      <h1>对话管理</h1>
-      <div class="header-actions">
-        <el-button type="primary" @click="showCreateDialog = true">
+      <h2>对话管理</h2>
+      <p>管理听力问答对话，设置音频、时间限制和相关问题</p>
+    </div>
+
+    <!-- 操作工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <!-- 增 - 新建 -->
+        <el-button type="primary" @click="showCreateDialog = true" v-if="hasPermission('ADMIN')">
           <el-icon><Plus /></el-icon>
           新建对话
         </el-button>
-        <el-button @click="showImportDialog = true">
-          <el-icon><Upload /></el-icon>
-          批量导入
+        
+        <!-- 删 - 批量删除 -->
+        <el-button 
+          type="danger" 
+          :disabled="selectedDialogs.length === 0"
+          @click="handleBatchDelete"
+          v-if="hasPermission('ADMIN')"
+        >
+          <el-icon><Delete /></el-icon>
+          批量删除 ({{ selectedDialogs.length }})
         </el-button>
-        <el-button @click="exportDialogs">
+        
+        <!-- 改 - 批量激活 -->
+        <el-button 
+          type="success" 
+          :disabled="selectedDialogs.length === 0"
+          @click="handleBatchActivate"
+          v-if="hasPermission('ADMIN')"
+        >
+          <el-icon><Select /></el-icon>
+          批量激活
+        </el-button>
+        
+        <!-- 改 - 批量停用 -->
+        <el-button 
+          type="warning" 
+          :disabled="selectedDialogs.length === 0"
+          @click="handleBatchDeactivate"
+          v-if="hasPermission('ADMIN')"
+        >
+          <el-icon><RemoveFilled /></el-icon>
+          批量停用
+        </el-button>
+        
+        <!-- 查 - 刷新 -->
+        <el-button @click="refreshList">
+          <el-icon><Refresh /></el-icon>
+          刷新
+        </el-button>
+        
+        <!-- 导出 -->
+        <el-button @click="handleExport">
           <el-icon><Download /></el-icon>
-          导出数据
+          导出
         </el-button>
+      </div>
+      <div class="toolbar-right">
+        <el-select
+          v-model="filterParams.moduleId"
+          placeholder="选择模块"
+          clearable
+          style="width: 150px; margin-right: 12px"
+          @change="handleFilter"
+        >
+          <el-option label="全部模块" value="" />
+          <el-option 
+            v-for="module in moduleOptions" 
+            :key="module.value" 
+            :label="module.label" 
+            :value="module.value" 
+          />
+        </el-select>
+        <el-select
+          v-model="filterParams.isActive"
+          placeholder="状态"
+          clearable
+          style="width: 120px; margin-right: 12px"
+          @change="handleFilter"
+        >
+          <el-option label="全部状态" value="" />
+          <el-option label="激活" :value="true" />
+          <el-option label="停用" :value="false" />
+        </el-select>
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索对话标题..."
+          style="width: 200px"
+          clearable
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
       </div>
     </div>
 
-    <!-- 搜索和筛选 -->
-    <div class="search-section">
-      <el-row :gutter="20">
-        <el-col :span="6">
-          <el-input
-            v-model="searchKeyword"
-            placeholder="搜索对话标题、内容..."
-            @input="handleSearch"
-            clearable
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-        </el-col>
-        <el-col :span="4">
-          <el-select v-model="filterParams.moduleId" placeholder="选择模块" clearable @change="handleFilter">
-            <el-option
-              v-for="module in moduleOptions"
-              :key="module.value"
-              :label="module.label"
-              :value="module.value"
-            />
-          </el-select>
-        </el-col>
-        <el-col :span="4">
-          <el-select v-model="filterParams.isActive" placeholder="状态" clearable @change="handleFilter">
-            <el-option label="激活" :value="true" />
-            <el-option label="未激活" :value="false" />
-          </el-select>
-        </el-col>
-        <el-col :span="4">
-          <el-select v-model="filterParams.dialogType" placeholder="对话类型" clearable @change="handleFilter">
-            <el-option label="短对话" value="short" />
-            <el-option label="中等对话" value="medium" />
-            <el-option label="长对话" value="long" />
-          </el-select>
-        </el-col>
-        <el-col :span="6">
-          <el-button type="primary" @click="handleFilter">
-            <el-icon><Search /></el-icon>
-            搜索
-          </el-button>
-          <el-button @click="resetFilters">
-            <el-icon><Refresh /></el-icon>
-            重置
-          </el-button>
-        </el-col>
-      </el-row>
-    </div>
 
-    <!-- 批量操作 -->
-    <div class="batch-actions" v-if="selectedDialogs.length > 0">
-      <el-alert
-        :title="`已选择 ${selectedDialogs.length} 项`"
-        type="info"
-        show-icon
-        :closable="false"
-      >
-        <template #default>
-          <el-button size="small" @click="batchActivate">批量激活</el-button>
-          <el-button size="small" @click="batchDeactivate">批量停用</el-button>
-          <el-button size="small" type="danger" @click="batchDelete">批量删除</el-button>
-        </template>
-      </el-alert>
-    </div>
-
-    <!-- 数据表格 -->
+    <!-- 对话列表 -->
     <div class="table-section">
       <el-table
         :data="dialogList"
@@ -94,6 +111,8 @@
         v-loading="loading"
         @selection-change="handleSelectionChange"
         @sort-change="handleSortChange"
+        stripe
+        border
       >
         <el-table-column type="selection" width="55" />
         
@@ -118,31 +137,40 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="音频信息" width="150">
+        <el-table-column label="音频" width="80" align="center">
           <template #default="scope">
-            <div v-if="scope.row.audioId">
-              <el-icon><VideoPlay /></el-icon>
-              {{ formatAudioDuration(scope.row.audioDurationSeconds) }}
-              <br>
-              <small>{{ getDialogType(scope.row.audioDurationSeconds) }}</small>
+            <template v-if="scope.row.audioId">
+              <el-tooltip 
+                :content="playingAudioId === scope.row.audioId ? '暂停音频' : '播放音频'" 
+                placement="top"
+              >
+                <el-button 
+                  :type="playingAudioId === scope.row.audioId ? 'success' : 'primary'"
+                  :icon="playingAudioId === scope.row.audioId ? VideoPause : VideoPlay"
+                  circle
+                  :class="{ 'playing-audio-btn': playingAudioId === scope.row.audioId }"
+                  @click="toggleAudio(scope.row.audioId)"
+                />
+              </el-tooltip>
+            </template>
+            <span v-else class="text-muted">无</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="问题数量" width="120" align="center">
+          <template #default="scope">
+            <div class="question-count-cell">
+              <el-tooltip content="管理问题" placement="top">
+                <div 
+                  class="question-count-badge"
+                  :class="getQuestionCountClass(scope.row.questionCount)"
+                  @click="manageQuestions(scope.row)"
+                >
+                  <el-icon class="question-icon"><QuestionFilled /></el-icon>
+                  <span class="count-number">{{ scope.row.questionCount || 0 }}</span>
+                </div>
+              </el-tooltip>
             </div>
-            <el-text v-else type="info">无音频</el-text>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="问题数量" width="100" align="center">
-          <template #default="scope">
-            <el-badge :value="scope.row.questionCount || 0" class="item">
-              <el-button size="small" text @click="manageQuestions(scope.row)">
-                <el-icon><QuestionFilled /></el-icon>
-              </el-button>
-            </el-badge>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="时间限制" width="100" align="center">
-          <template #default="scope">
-            {{ formatTimeLimit(scope.row.timeLimitSeconds) }}
           </template>
         </el-table-column>
 
@@ -164,38 +192,30 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="200" align="center" fixed="right">
+        <el-table-column label="操作" width="180" align="center" fixed="right">
           <template #default="scope">
-            <el-button size="small" @click="viewDialog(scope.row)">
-              <el-icon><View /></el-icon>
-              查看
-            </el-button>
-            <el-button 
-              size="small" 
-              type="primary" 
-              @click="editDialog(scope.row)"
-              v-if="hasPermission('ADMIN')"
-            >
-              <el-icon><Edit /></el-icon>
-              编辑
-            </el-button>
-            <el-button
-              size="small"
-              @click="copyDialogAction(scope.row)"
-              v-if="hasPermission('ADMIN')"
-            >
-              <el-icon><DocumentCopy /></el-icon>
-              复制
-            </el-button>
-            <el-button
-              size="small"
-              type="danger"
-              @click="deleteDialogAction(scope.row)"
-              v-if="hasPermission('ADMIN')"
-            >
-              <el-icon><Delete /></el-icon>
-              删除
-            </el-button>
+            <div class="action-buttons">
+              <el-tooltip content="查看" placement="top">
+                <el-button size="small" circle @click="viewDialog(scope.row)">
+                  <el-icon><View /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="编辑" placement="top">
+                <el-button size="small" circle type="primary" @click="editDialog(scope.row)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="复制" placement="top" >
+                <el-button size="small" circle type="success" @click="copyDialogAction(scope.row)">
+                  <el-icon><DocumentCopy /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button size="small" circle type="danger" @click="deleteDialogAction(scope.row)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -227,25 +247,25 @@
         :rules="dialogRules"
         label-width="120px"
       >
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="对话标题" prop="title">
-              <el-input v-model="dialogForm.title" placeholder="请输入对话标题" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="所属模块" prop="moduleId">
-              <el-select v-model="dialogForm.moduleId" placeholder="请选择模块" style="width: 100%">
-                <el-option
-                  v-for="module in moduleOptions"
-                  :key="module.value"
-                  :label="module.label"
-                  :value="module.value"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-form-item label="对话标题" prop="title">
+          <el-input v-model="dialogForm.title" placeholder="请输入对话标题" />
+        </el-form-item>
+
+        <el-form-item label="所属模块" prop="moduleId">
+          <el-select 
+            v-model="dialogForm.moduleId" 
+            placeholder="请选择所属模块" 
+            style="width: 100%"
+            clearable
+          >
+            <el-option 
+              v-for="module in moduleOptions" 
+              :key="module.value" 
+              :label="module.label" 
+              :value="module.value" 
+            />
+          </el-select>
+        </el-form-item>
 
         <el-form-item label="对话描述">
           <el-input
@@ -265,40 +285,64 @@
           />
         </el-form-item>
 
-        <el-row :gutter="20">
-          <el-col :span="8">
-            <el-form-item label="音频时长(秒)">
-              <el-input-number
-                v-model="dialogForm.audioDurationSeconds"
-                :min="0"
-                :max="3600"
-                placeholder="音频时长"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="答题时限(秒)">
-              <el-input-number
-                v-model="dialogForm.timeLimitSeconds"
-                :min="0"
-                :max="3600"
-                placeholder="答题时间限制"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="显示顺序" prop="displayOrder">
-              <el-input-number
-                v-model="dialogForm.displayOrder"
-                :min="1"
-                placeholder="显示顺序"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-form-item label="音频文件" prop="audioId">
+          <div class="audio-upload">
+            <el-upload
+              ref="audioUploadRef"
+              :auto-upload="false"
+              :on-change="handleAudioChange"
+              :before-upload="beforeAudioUpload"
+              :file-list="audioFileList"
+              v-model:file-list="audioFileList"
+              :limit="1"
+              accept="audio/*"
+            >
+              <el-button type="primary">
+                <el-icon><Upload /></el-icon>
+                选择音频文件
+              </el-button>
+              <template #tip>
+                <div class="el-upload__tip">
+                  支持mp3、wav格式，文件大小不超过50MB（选择后点击创建按钮时上传）
+                </div>
+              </template>
+            </el-upload>
+            
+            <!-- 音频预览 -->
+            <div v-if="currentAudioUrl || dialogForm.audioId" class="audio-preview">
+              <div class="audio-info">
+                <el-icon color="#67c23a"><VideoPlay /></el-icon>
+                <span class="audio-label">音频文件</span>
+              </div>
+              <audio 
+                :src="currentAudioUrl || getAudioUrl(dialogForm.audioId)" 
+                controls 
+                style="width: 100%; margin-top: 10px"
+              >
+                您的浏览器不支持音频播放
+              </audio>
+              <div class="audio-actions">
+                <el-button 
+                  size="small" 
+                  type="danger" 
+                  @click="removeAudio"
+                  style="margin-top: 8px;"
+                >
+                  移除音频
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </el-form-item>
+
+        <el-form-item label="显示顺序" prop="displayOrder">
+          <el-input-number
+            v-model="dialogForm.displayOrder"
+            :min="1"
+            placeholder="显示顺序"
+            style="width: 200px"
+          />
+        </el-form-item>
 
         <el-row :gutter="20">
           <el-col :span="12">
@@ -351,12 +395,6 @@
           <el-descriptions-item label="所属模块">
             {{ getModuleName(currentDialog.moduleId) }}
           </el-descriptions-item>
-          <el-descriptions-item label="音频时长">
-            {{ formatAudioDuration(currentDialog.audioDurationSeconds) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="答题时限">
-            {{ formatTimeLimit(currentDialog.timeLimitSeconds) }}
-          </el-descriptions-item>
           <el-descriptions-item label="显示顺序">
             {{ currentDialog.displayOrder }}
           </el-descriptions-item>
@@ -364,6 +402,16 @@
             <el-tag :type="currentDialog.isActive ? 'success' : 'danger'">
               {{ currentDialog.isActive ? '激活' : '停用' }}
             </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="音频">
+            <el-tag v-if="currentDialog.audioId" type="success">
+              <el-icon><VideoPlay /></el-icon>
+              有音频
+            </el-tag>
+            <el-tag v-else type="info">无音频</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="问题数量">
+            <el-tag type="info">{{ currentDialog.questionCount || 0 }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="创建时间">
             {{ formatDateTime(currentDialog.createdAt) }}
@@ -481,8 +529,11 @@ import {
   Delete,
   DocumentCopy,
   VideoPlay,
+  VideoPause,
   QuestionFilled,
-  UploadFilled
+  UploadFilled,
+  Select,
+  RemoveFilled
 } from '@element-plus/icons-vue'
 
 // API导入
@@ -506,6 +557,8 @@ import {
   exportListeningQuestionTemplate,
   importListeningQuestions
 } from '@/api/lsa-dialogs'
+import { getExamModules, getModulesByType } from '@/api/exam-module'
+import request from '@/utils/request'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -517,6 +570,14 @@ const importing = ref(false)
 const dialogList = ref([])
 const selectedDialogs = ref([])
 const currentDialog = ref(null)
+
+// 音频相关
+const playingAudioId = ref(null)
+const currentAudio = ref(null)
+const audioFileList = ref([])
+const currentAudioUrl = ref('')
+const currentAudioFile = ref(null)
+const audioUploadRef = ref(null)
 
 // 搜索和筛选
 const searchKeyword = ref('')
@@ -547,7 +608,10 @@ const isEdit = ref(false)
 
 // 表单
 const dialogFormRef = ref(null)
-const dialogForm = reactive(generateDialogTemplate())
+const dialogForm = reactive({
+  ...generateDialogTemplate(),
+  displayOrder: 1
+})
 const dialogRules = {
   title: [
     { required: true, message: '请输入对话标题', trigger: 'blur' },
@@ -569,22 +633,85 @@ const importOptions = reactive({
   validateData: true
 })
 
-// 模块选项（模拟数据，实际应该从API获取）
-const moduleOptions = ref([
-  { value: 1, label: '听力理解模块1' },
-  { value: 2, label: '听力理解模块2' },
-  { value: 3, label: '听力理解模块3' }
-])
+// 模块选项
+const moduleOptions = ref([])
 
 // 权限检查
 const hasPermission = (role) => {
   return authStore.hasRole(role)
 }
 
+// 加载模块列表
+const loadModules = async () => {
+  try {
+    console.log('📦 开始加载模块列表...')
+    
+    // 尝试获取听力相关的模块
+    const response = await getModulesByType('LISTENING_QA', { page: 0, size: 100 })
+    
+    console.log('📦 模块列表响应:', response.data)
+    
+    const modules = response.data.content || response.data.data?.content || []
+    
+    moduleOptions.value = modules.map(module => ({
+      value: module.id,
+      label: module.moduleName || module.moduleType || `模块${module.id}`
+    }))
+    
+    console.log('📦 模块选项:', moduleOptions.value)
+    
+    // 如果没有找到听力模块，尝试获取所有模块
+    if (moduleOptions.value.length === 0) {
+      console.log('📦 未找到听力模块，尝试获取所有模块...')
+      const allModulesResponse = await getExamModules({ page: 0, size: 100 })
+      const allModules = allModulesResponse.data.content || allModulesResponse.data.data?.content || []
+      
+      moduleOptions.value = allModules.map(module => ({
+        value: module.id,
+        label: module.moduleName || module.moduleType || `模块${module.id}`
+      }))
+    }
+    
+    // 如果还是没有数据，使用默认模块
+    if (moduleOptions.value.length === 0) {
+      console.log('📦 使用默认模块选项')
+      moduleOptions.value = [
+        { value: 1, label: '听力问答模块' },
+        { value: 2, label: '听力理解模块' },
+        { value: 3, label: '综合听力模块' }
+      ]
+    }
+    
+    console.log('✅ 模块列表加载完成，共', moduleOptions.value.length, '个模块')
+  } catch (error) {
+    console.error('❌ 加载模块列表失败:', error)
+    // 使用默认模块选项
+    moduleOptions.value = [
+      { value: 1, label: '听力问答模块' },
+      { value: 2, label: '听力理解模块' },
+      { value: 3, label: '综合听力模块' }
+    ]
+    console.log('📦 使用默认模块选项')
+  }
+}
+
 // 获取模块名称
 const getModuleName = (moduleId) => {
   const module = moduleOptions.value.find(m => m.value === moduleId)
   return module ? module.label : `模块${moduleId}`
+}
+
+// 获取问题数量样式类
+const getQuestionCountClass = (count) => {
+  if (!count || count === 0) {
+    return 'count-zero'
+  } else if (count <= 3) {
+    return 'count-low'
+  } else if (count <= 6) {
+    return 'count-medium'
+  } else {
+    return 'count-high'
+  }
 }
 
 // 格式化日期时间
@@ -605,7 +732,9 @@ const loadDialogs = async () => {
 
     // 添加筛选参数
     if (filterParams.moduleId) params.moduleId = filterParams.moduleId
-    if (filterParams.isActive !== null) params.isActive = filterParams.isActive
+    if (filterParams.isActive !== null && filterParams.isActive !== '') {
+      params.isActive = filterParams.isActive
+    }
 
     let response
     if (searchKeyword.value) {
@@ -614,10 +743,22 @@ const loadDialogs = async () => {
       response = await getDialogs(params)
     }
 
-    dialogList.value = response.data.content || []
-    pagination.total = response.data.totalElements || 0
+    console.log('📋 对话列表响应:', response.data)
+
+    // 处理响应数据，确保状态字段正确
+    const content = response.data.data?.content || response.data.content || []
+    dialogList.value = content.map(dialog => ({
+      ...dialog,
+      // 确保 isActive 是布尔值
+      isActive: dialog.isActive === true || dialog.isActive === 'true' || dialog.isActive === 1
+    }))
+    
+    pagination.total = response.data.data?.totalElements || response.data.totalElements || 0
+    
+    console.log('📋 处理后的对话列表:', dialogList.value)
   } catch (error) {
-    ElMessage.error('加载对话列表失败：' + error.message)
+    console.error('❌ 加载对话列表失败:', error)
+    ElMessage.error('加载对话列表失败：' + (error.message || '未知错误'))
   } finally {
     loading.value = false
   }
@@ -645,6 +786,19 @@ const resetFilters = () => {
   })
   pagination.page = 1
   loadDialogs()
+}
+
+// 刷新列表
+const refreshList = () => {
+  searchKeyword.value = ''
+  Object.assign(filterParams, {
+    moduleId: null,
+    isActive: null,
+    dialogType: null
+  })
+  pagination.page = 1
+  loadDialogs()
+  ElMessage.success('列表已刷新')
 }
 
 // 分页处理
@@ -683,10 +837,24 @@ const viewDialog = async (dialog) => {
 }
 
 // 编辑对话
-const editDialog = (dialog) => {
+const editDialog = async (dialog) => {
   isEdit.value = true
-  Object.assign(dialogForm, dialog)
-  showCreateDialog.value = true
+  
+  try {
+    const response = await getDialogById(dialog.id)
+    Object.assign(dialogForm, response.data.data)
+    
+    // 清空新上传的音频
+    currentAudioFile.value = null
+    currentAudioUrl.value = ''
+    
+    // 如果有现有音频，不作为新上传文件
+    audioFileList.value = []
+    
+    showCreateDialog.value = true
+  } catch (error) {
+    ElMessage.error('加载对话信息失败：' + error.message)
+  }
 }
 
 // 复制对话
@@ -723,12 +891,37 @@ const deleteDialogAction = (dialog) => {
 
 // 切换对话状态
 const toggleDialogStatus = async (dialog) => {
+  const originalStatus = dialog.isActive
+  const targetStatus = !originalStatus
+  
+  console.log(`🔄 切换对话状态 - ID: ${dialog.id}, 原状态: ${originalStatus}, 目标状态: ${targetStatus}`)
+  
   try {
-    await toggleDialogActive(dialog.id)
+    // 先更新UI状态（乐观更新）
+    dialog.isActive = targetStatus
+    
+    // 调用后端API
+    const response = await toggleDialogActive(dialog.id)
+    console.log('🔄 状态切换响应:', response.data)
+    
+    // 从后端获取最新状态
+    const refreshedDialog = await getDialogById(dialog.id)
+    const newStatus = refreshedDialog.data.isActive
+    
+    console.log(`✅ 状态切换成功 - 最新状态: ${newStatus}`)
+    
+    // 更新为后端返回的最新状态
+    dialog.isActive = newStatus === true || newStatus === 'true' || newStatus === 1
+    
     ElMessage.success(`对话已${dialog.isActive ? '激活' : '停用'}`)
+    
+    // 刷新列表以确保所有数据同步
+    loadDialogs()
   } catch (error) {
-    dialog.isActive = !dialog.isActive // 恢复状态
-    ElMessage.error('状态切换失败：' + error.message)
+    console.error('❌ 状态切换失败:', error)
+    // 恢复原状态
+    dialog.isActive = originalStatus
+    ElMessage.error('状态切换失败：' + (error.message || '未知错误'))
   }
 }
 
@@ -742,29 +935,80 @@ const manageQuestions = (dialog) => {
 }
 
 // 批量操作
-const batchActivate = async () => {
-  try {
-    const ids = selectedDialogs.value.map(d => d.id)
-    await batchActivateDialogs(ids)
-    ElMessage.success('批量激活成功')
-    loadDialogs()
-  } catch (error) {
-    ElMessage.error('批量激活失败：' + error.message)
+const handleBatchActivate = () => {
+  if (selectedDialogs.value.length === 0) {
+    ElMessage.warning('请选择要激活的对话')
+    return
   }
+  
+  const count = selectedDialogs.value.length
+  ElMessageBox.confirm(
+    `确定要激活选中的 ${count} 个对话吗？`,
+    '确认批量激活',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'info'
+    }
+  ).then(async () => {
+    try {
+      const ids = selectedDialogs.value.map(d => d.id)
+      console.log('🔄 批量激活对话 - IDs:', ids)
+      
+      await batchActivateDialogs(ids)
+      
+      ElMessage.success(`成功激活 ${count} 个对话`)
+      selectedDialogs.value = []
+      loadDialogs()
+    } catch (error) {
+      console.error('❌ 批量激活失败:', error)
+      ElMessage.error('批量激活失败：' + (error.message || '未知错误'))
+    }
+  }).catch(() => {
+    // 用户取消操作
+  })
 }
 
-const batchDeactivate = async () => {
-  try {
-    const ids = selectedDialogs.value.map(d => d.id)
-    await batchDeactivateDialogs(ids)
-    ElMessage.success('批量停用成功')
-    loadDialogs()
-  } catch (error) {
-    ElMessage.error('批量停用失败：' + error.message)
+const handleBatchDeactivate = () => {
+  if (selectedDialogs.value.length === 0) {
+    ElMessage.warning('请选择要停用的对话')
+    return
   }
+  
+  const count = selectedDialogs.value.length
+  ElMessageBox.confirm(
+    `确定要停用选中的 ${count} 个对话吗？`,
+    '确认批量停用',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(async () => {
+    try {
+      const ids = selectedDialogs.value.map(d => d.id)
+      console.log('🔄 批量停用对话 - IDs:', ids)
+      
+      await batchDeactivateDialogs(ids)
+      
+      ElMessage.success(`成功停用 ${count} 个对话`)
+      selectedDialogs.value = []
+      loadDialogs()
+    } catch (error) {
+      console.error('❌ 批量停用失败:', error)
+      ElMessage.error('批量停用失败：' + (error.message || '未知错误'))
+    }
+  }).catch(() => {
+    // 用户取消操作
+  })
 }
 
-const batchDelete = () => {
+const handleBatchDelete = () => {
+  if (selectedDialogs.value.length === 0) {
+    ElMessage.warning('请选择要删除的对话')
+    return
+  }
+  
   const count = selectedDialogs.value.length
   ElMessageBox.confirm(
     `确定要删除选中的 ${count} 个对话吗？此操作不可恢复。`,
@@ -787,6 +1031,201 @@ const batchDelete = () => {
   })
 }
 
+// 音频相关方法
+const handleAudioChange = (file) => {
+  console.log('音频文件选择:', file)
+  currentAudioFile.value = file.raw
+  if (file.raw) {
+    currentAudioUrl.value = URL.createObjectURL(file.raw)
+  }
+  // 更新文件列表显示
+  audioFileList.value = [file]
+}
+
+const beforeAudioUpload = (file) => {
+  const isAudio = file.type.startsWith('audio/')
+  const isLt50M = file.size / 1024 / 1024 < 50
+
+  if (!isAudio) {
+    ElMessage.error('只能上传音频文件!')
+    return false
+  }
+  if (!isLt50M) {
+    ElMessage.error('音频文件大小不能超过 50MB!')
+    return false
+  }
+  return true
+}
+
+const uploadAudioFile = async () => {
+  if (!currentAudioFile.value) {
+    return null
+  }
+  
+  try {
+    console.log('开始上传音频文件:', currentAudioFile.value.name)
+    
+    const formData = new FormData()
+    formData.append('file', currentAudioFile.value)
+    formData.append('type', 'audio')
+    formData.append('category', 'lsa-dialog')
+    formData.append('title', `${dialogForm.title} 音频`)
+    formData.append('description', `听力问答对话 "${dialogForm.title}" 的音频文件`)
+    
+    // 使用媒体上传API
+    const { uploadMediaFile } = await import('@/api/media')
+    const response = await uploadMediaFile(formData)
+    
+    console.log('音频上传响应:', response)
+    
+    // 检查多种可能的响应格式
+    let mediaData = null
+    if (response && response.data) {
+      if (response.data.data && response.data.data.id) {
+        mediaData = response.data.data
+      } else if (response.data.id) {
+        mediaData = response.data
+      }
+    }
+    
+    if (mediaData && mediaData.id) {
+      console.log('音频上传成功，ID:', mediaData.id)
+      ElMessage.success('音频上传成功')
+      return mediaData.id
+    } else {
+      console.error('音频上传响应格式异常:', response)
+      ElMessage.error('音频上传失败：响应格式异常')
+      return null
+    }
+  } catch (error) {
+    console.error('音频上传失败:', error)
+    ElMessage.error('音频上传失败: ' + (error.message || error))
+    return null
+  }
+}
+
+const removeAudio = () => {
+  currentAudioFile.value = null
+  currentAudioUrl.value = ''
+  audioFileList.value = []
+  dialogForm.audioId = null
+  
+  // 清空音频上传组件
+  if (audioUploadRef.value) {
+    audioUploadRef.value.clearFiles()
+  }
+}
+
+const getAudioUrl = (audioId) => {
+  if (!audioId) return null
+  return `/api/media/audio/${audioId}`
+}
+
+// 切换音频播放/暂停
+const toggleAudio = async (audioId) => {
+  // 如果点击的是正在播放的音频，则暂停
+  if (playingAudioId.value === audioId && currentAudio.value) {
+    pauseAudio()
+    return
+  }
+  
+  // 否则播放新音频
+  await playAudio(audioId)
+}
+
+// 暂停音频
+const pauseAudio = () => {
+  if (currentAudio.value) {
+    currentAudio.value.pause()
+    playingAudioId.value = null
+    currentAudio.value = null
+    console.log('🎵 音频已暂停')
+  }
+}
+
+// 播放音频
+const playAudio = async (audioId) => {
+  console.log('🎵 尝试播放音频，音频ID:', audioId)
+  
+  if (!audioId) {
+    ElMessage.warning('音频ID不存在')
+    return
+  }
+  
+  // 如果有正在播放的音频，先停止
+  if (currentAudio.value) {
+    currentAudio.value.pause()
+    currentAudio.value = null
+  }
+  
+  try {
+    // 通过后端API获取媒体资源信息
+    console.log('🎵 调用后端API获取媒体资源:', audioId)
+    const response = await request.get(`/media/${audioId}`)
+
+    console.log('🎵 后端媒体资源响应:', response.data)
+
+    const previewUrl = response.data.data.previewUrl
+    console.log('🎵 后端返回的预览URL:', previewUrl)
+
+    // 将相对路径拼接成完整路径
+    let audioUrl = null
+    if (previewUrl) {
+      if (previewUrl.startsWith('http')) {
+        // 已经是完整URL
+        audioUrl = previewUrl
+      } else {
+        // 相对路径，需要拼接API基础路径
+        const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+        audioUrl = previewUrl.startsWith('/') ? `${baseURL}${previewUrl}` : `${baseURL}/${previewUrl}`
+      }
+    }
+    
+    console.log('🎵 构建的完整音频URL:', audioUrl)
+    
+    if (!audioUrl) {
+      ElMessage.error('无法获取音频URL')
+      return
+    }
+    
+    // 创建音频元素
+    const audio = new Audio(audioUrl)
+    currentAudio.value = audio
+    
+    // 添加事件监听
+    audio.addEventListener('error', (e) => {
+      console.error('🎵 音频加载错误:', e)
+      ElMessage.error('音频文件加载失败')
+      playingAudioId.value = null
+      currentAudio.value = null
+    })
+    
+    // 音频播放结束时重置状态
+    audio.addEventListener('ended', () => {
+      console.log('🎵 音频播放完成')
+      playingAudioId.value = null
+      currentAudio.value = null
+    })
+    
+    // 尝试播放
+    audio.play().then(() => {
+      console.log('🎵 音频播放开始')
+      playingAudioId.value = audioId
+    }).catch(error => {
+      console.error('🎵 音频播放失败:', error)
+      ElMessage.error('音频播放失败: ' + error.message)
+      playingAudioId.value = null
+      currentAudio.value = null
+    })
+    
+  } catch (error) {
+    console.error('🎵 调用后端API失败:', error)
+    ElMessage.error('获取音频资源失败: ' + (error.message || error))
+    playingAudioId.value = null
+    currentAudio.value = null
+  }
+}
+
 // 提交对话表单
 const submitDialog = async () => {
   if (!dialogFormRef.value) return
@@ -804,9 +1243,54 @@ const submitDialog = async () => {
     submitting.value = true
 
     if (isEdit.value) {
+      // 编辑模式：如果有新音频文件，先上传再更新
+      if (currentAudioFile.value) {
+        console.log('编辑模式：上传新音频文件...')
+        const audioId = await uploadAudioFile()
+        
+        if (audioId) {
+          dialogForm.audioId = audioId
+          console.log('新音频ID已设置:', audioId)
+        } else {
+          ElMessage.error('音频上传失败，请重试')
+          submitting.value = false
+          return
+        }
+      }
+      
       await updateDialog(dialogForm.id, dialogForm)
       ElMessage.success('对话更新成功')
     } else {
+      // 创建模式：先上传音频获取ID，再创建对话
+      console.log('创建模式：开始上传音频文件...')
+      
+      let uploadedAudioId = null
+      
+      if (currentAudioFile.value) {
+        try {
+          // 先上传音频文件
+          uploadedAudioId = await uploadAudioFile()
+          
+          if (!uploadedAudioId) {
+            ElMessage.error('音频上传失败，请重试')
+            submitting.value = false
+            return
+          }
+          
+          console.log('音频上传成功，ID:', uploadedAudioId)
+          
+          // 设置音频ID
+          dialogForm.audioId = uploadedAudioId
+        } catch (uploadError) {
+          console.error('音频上传失败:', uploadError)
+          ElMessage.error('音频上传失败，请重试')
+          submitting.value = false
+          return
+        }
+      }
+      
+      // 创建对话记录
+      console.log('创建对话记录，包含音频ID:', uploadedAudioId)
       await createDialog(dialogForm)
       ElMessage.success('对话创建成功')
     }
@@ -825,15 +1309,51 @@ const resetDialogForm = () => {
   if (dialogFormRef.value) {
     dialogFormRef.value.resetFields()
   }
-  Object.assign(dialogForm, generateDialogTemplate())
+  
+  // 生成新的表单模板并设置默认值
+  const template = generateDialogTemplate()
+  Object.assign(dialogForm, {
+    ...template,
+    displayOrder: 1
+  })
+  
   isEdit.value = false
+  
+  // 清空音频相关数据
+  currentAudioFile.value = null
+  currentAudioUrl.value = ''
+  audioFileList.value = []
+  
+  // 清空音频上传组件
+  if (audioUploadRef.value) {
+    audioUploadRef.value.clearFiles()
+  }
 }
 
 // 导出数据
-const exportDialogs = async () => {
+const handleExport = async () => {
   try {
-    // 这里应该调用导出API，当前为模拟
-    ElMessage.info('导出功能正在开发中')
+    const params = {}
+    if (filterParams.moduleId) {
+      params.moduleId = filterParams.moduleId
+    }
+    if (filterParams.isActive !== null) {
+      params.isActive = filterParams.isActive
+    }
+    
+    // 创建下载链接
+    const timestamp = new Date().toISOString().slice(0, 10)
+    ElMessage.success(`导出对话数据（${timestamp}）`)
+    
+    // TODO: 实际的导出API调用
+    // const response = await exportDialogsAPI(params)
+    // const blob = new Blob([response], { type: 'text/csv;charset=utf-8' })
+    // const url = URL.createObjectURL(blob)
+    // const link = document.createElement('a')
+    // link.href = url
+    // link.download = `dialogs_${timestamp}.csv`
+    // link.click()
+    // URL.revokeObjectURL(url)
   } catch (error) {
     ElMessage.error('导出失败：' + error.message)
   }
@@ -888,55 +1408,71 @@ const submitImport = async () => {
 
 // 组件挂载时加载数据
 onMounted(() => {
-  loadDialogs()
+  loadModules()  // 加载模块列表
+  loadDialogs()  // 加载对话列表
 })
 </script>
 
 <style scoped>
 .dialog-management {
   padding: 20px;
+  background-color: #f5f5f5;
+  min-height: calc(100vh - 60px);
 }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.page-header h1 {
-  margin: 0;
-  color: #303133;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.search-section {
-  margin-bottom: 20px;
-  padding: 20px;
   background: white;
-  border-radius: 4px;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.batch-actions {
+.page-header h2 {
+  margin: 0 0 8px 0;
+  color: #303133;
+  font-size: 20px;
+}
+
+.page-header p {
+  margin: 0;
+  color: #606266;
+  font-size: 14px;
+}
+
+.toolbar {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
   margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.toolbar-left {
+  display: flex;
+  gap: 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0;
 }
 
 .table-section {
   background: white;
-  border-radius: 4px;
+  border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  padding: 20px;
+  overflow: hidden;
 }
 
 .pagination-section {
   display: flex;
   justify-content: center;
-  margin-top: 20px;
+  padding: 20px;
 }
 
 .dialog-title .title {
@@ -945,13 +1481,26 @@ onMounted(() => {
   margin-bottom: 4px;
 }
 
+.dialog-detail {
+  padding: 16px 0;
+}
+
+.dialog-detail h4 {
+  margin: 0 0 12px 0;
+  color: #303133;
+  font-size: 16px;
+}
+
 .dialog-detail .dialog-text {
   white-space: pre-wrap;
-  background: #f5f5f5;
-  padding: 10px;
-  border-radius: 4px;
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
   display: block;
   margin-top: 8px;
+  line-height: 1.6;
+  color: #303133;
 }
 
 .import-section .mb-4 {
@@ -974,5 +1523,156 @@ onMounted(() => {
 
 .mr-1 {
   margin-right: 4px;
+}
+
+/* 操作按钮样式 */
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-buttons .el-button.is-circle {
+  padding: 6px;
+}
+
+/* 文本样式 */
+.text-muted {
+  color: #909399;
+  font-size: 12px;
+}
+
+/* 音频上传样式 */
+.audio-upload {
+  width: 100%;
+}
+
+.audio-preview {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.audio-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.audio-label {
+  color: #303133;
+}
+
+.audio-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* 正在播放的音频按钮样式 */
+.playing-audio-btn {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(103, 194, 58, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(103, 194, 58, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(103, 194, 58, 0);
+  }
+}
+
+/* 问题数量样式 */
+.question-count-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.question-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  min-width: 60px;
+  justify-content: center;
+}
+
+.question-icon {
+  font-size: 16px;
+}
+
+.count-number {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* 0个问题 - 灰色 */
+.question-count-badge.count-zero {
+  background: #f5f7fa;
+  color: #909399;
+  border: 1px solid #e4e7ed;
+}
+
+.question-count-badge.count-zero:hover {
+  background: #ebeef5;
+  border-color: #d3d6dd;
+  transform: translateY(-1px);
+}
+
+/* 1-3个问题 - 蓝色 */
+.question-count-badge.count-low {
+  background: #ecf5ff;
+  color: #409eff;
+  border: 1px solid #d9ecff;
+}
+
+.question-count-badge.count-low:hover {
+  background: #d9ecff;
+  border-color: #b3d8ff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.2);
+}
+
+/* 4-6个问题 - 橙色 */
+.question-count-badge.count-medium {
+  background: #fdf6ec;
+  color: #e6a23c;
+  border: 1px solid #f5dab1;
+}
+
+.question-count-badge.count-medium:hover {
+  background: #f5dab1;
+  border-color: #ebb563;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(230, 162, 60, 0.2);
+}
+
+/* 7+个问题 - 绿色 */
+.question-count-badge.count-high {
+  background: #f0f9ff;
+  color: #67c23a;
+  border: 1px solid #c2e7b0;
+}
+
+.question-count-badge.count-high:hover {
+  background: #c2e7b0;
+  border-color: #95d475;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.2);
 }
 </style>

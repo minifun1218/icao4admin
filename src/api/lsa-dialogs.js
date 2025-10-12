@@ -532,14 +532,6 @@ export const validateDialogData = (dialog) => {
     errors.push('对话标题长度不能超过255个字符')
   }
   
-  if (!dialog.moduleId) {
-    errors.push('必须选择所属模块')
-  }
-  
-  if (dialog.audioDurationSeconds && dialog.audioDurationSeconds < 0) {
-    errors.push('音频时长不能为负数')
-  }
-  
   if (dialog.timeLimitSeconds && dialog.timeLimitSeconds < 0) {
     errors.push('答题时长限制不能为负数')
   }

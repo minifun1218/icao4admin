@@ -1,106 +1,140 @@
 <template>
   <div class="question-management">
-    <!-- 页面头部 -->
+    <!-- 页面标题 -->
     <div class="page-header">
-      <div class="header-left">
-        <el-breadcrumb separator="/">
-          <el-breadcrumb-item>
-            <el-button text @click="goBackToDialogs">
-              <el-icon><ArrowLeft /></el-icon>
-              返回对话列表
-            </el-button>
-          </el-breadcrumb-item>
-        </el-breadcrumb>
-        <h1>问题管理</h1>
-        <el-tag v-if="currentDialogTitle" type="info" class="ml-2">
-          {{ currentDialogTitle }}
-        </el-tag>
+      <div class="header-content">
+        <el-button text @click="goBackToDialogs" class="back-button">
+          <el-icon><ArrowLeft /></el-icon>
+          返回对话列表
+        </el-button>
+        <div class="title-section">
+          <h2>问题管理</h2>
+          <el-tag v-if="currentDialogTitle" type="info" class="dialog-tag">
+            {{ currentDialogTitle }}
+          </el-tag>
+        </div>
       </div>
-      <div class="header-actions">
-        <el-button type="primary" @click="showCreateQuestion = true">
+    </div>
+
+    <!-- 操作工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <!-- 增 - 新建 -->
+        <el-button type="primary" @click="showCreateQuestion = true" v-if="hasPermission('ADMIN')">
           <el-icon><Plus /></el-icon>
           新建问题
         </el-button>
-        <el-button @click="showImportQuestion = true">
-          <el-icon><Upload /></el-icon>
-          批量导入
+        
+        <!-- 删 - 批量删除 -->
+        <el-button 
+          type="danger" 
+          :disabled="selectedQuestions.length === 0"
+          @click="batchDelete"
+          v-if="hasPermission('ADMIN')"
+        >
+          <el-icon><Delete /></el-icon>
+          批量删除 ({{ selectedQuestions.length }})
         </el-button>
+        
+        <!-- 改 - 批量激活 -->
+        <el-button 
+          type="success" 
+          :disabled="selectedQuestions.length === 0"
+          @click="batchActivate"
+          v-if="hasPermission('ADMIN')"
+        >
+          <el-icon><Select /></el-icon>
+          批量激活
+        </el-button>
+        
+        <!-- 改 - 批量停用 -->
+        <el-button 
+          type="warning" 
+          :disabled="selectedQuestions.length === 0"
+          @click="batchDeactivate"
+          v-if="hasPermission('ADMIN')"
+        >
+          <el-icon><RemoveFilled /></el-icon>
+          批量停用
+        </el-button>
+        
+        <!-- 批量设置难度 -->
+        <el-button 
+          :disabled="selectedQuestions.length === 0"
+          @click="batchUpdateDifficulty"
+          v-if="hasPermission('ADMIN')"
+        >
+          <el-icon><Setting /></el-icon>
+          批量设置难度
+        </el-button>
+        
+        <!-- 查 - 刷新 -->
+        <el-button @click="refreshList">
+          <el-icon><Refresh /></el-icon>
+          刷新
+        </el-button>
+        
+        <!-- 导出 -->
         <el-button @click="exportQuestions">
           <el-icon><Download /></el-icon>
-          导出数据
+          导出
         </el-button>
       </div>
-    </div>
-
-    <!-- 搜索和筛选 -->
-    <div class="search-section">
-      <el-row :gutter="20">
-        <el-col :span="6">
-          <el-input
-            v-model="searchKeyword"
-            placeholder="搜索问题内容..."
-            @input="handleSearch"
-            clearable
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-        </el-col>
-        <el-col :span="4">
-          <el-select v-model="filterParams.questionType" placeholder="问题类型" clearable @change="handleFilter">
-            <el-option
-              v-for="type in questionTypeOptions"
-              :key="type.value"
-              :label="type.label"
-              :value="type.value"
-            />
-          </el-select>
-        </el-col>
-        <el-col :span="4">
-          <el-select v-model="filterParams.difficultyLevel" placeholder="难度等级" clearable @change="handleFilter">
-            <el-option
-              v-for="level in difficultyLevelOptions"
-              :key="level.value"
-              :label="level.label"
-              :value="level.value"
-            />
-          </el-select>
-        </el-col>
-        <el-col :span="4">
-          <el-select v-model="filterParams.isActive" placeholder="状态" clearable @change="handleFilter">
-            <el-option label="激活" :value="true" />
-            <el-option label="未激活" :value="false" />
-          </el-select>
-        </el-col>
-        <el-col :span="6">
-          <el-button type="primary" @click="handleFilter">
+      <div class="toolbar-right">
+        <el-select
+          v-model="filterParams.questionType"
+          placeholder="问题类型"
+          clearable
+          style="width: 150px; margin-right: 12px"
+          @change="handleFilter"
+        >
+          <el-option label="全部类型" value="" />
+          <el-option
+            v-for="type in questionTypeOptions"
+            :key="type.value"
+            :label="type.label"
+            :value="type.value"
+          />
+        </el-select>
+        <el-select
+          v-model="filterParams.difficultyLevel"
+          placeholder="难度等级"
+          clearable
+          style="width: 120px; margin-right: 12px"
+          @change="handleFilter"
+        >
+          <el-option label="全部难度" value="" />
+          <el-option
+            v-for="level in difficultyLevelOptions"
+            :key="level.value"
+            :label="level.label"
+            :value="level.value"
+          />
+        </el-select>
+        <el-select
+          v-model="filterParams.isActive"
+          placeholder="状态"
+          clearable
+          style="width: 120px; margin-right: 12px"
+          @change="handleFilter"
+        >
+          <el-option label="全部状态" value="" />
+          <el-option label="激活" :value="true" />
+          <el-option label="停用" :value="false" />
+        </el-select>
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索问题内容..."
+          style="width: 200px"
+          clearable
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
+        >
+          <template #prefix>
             <el-icon><Search /></el-icon>
-            搜索
-          </el-button>
-          <el-button @click="resetFilters">
-            <el-icon><Refresh /></el-icon>
-            重置
-          </el-button>
-        </el-col>
-      </el-row>
-    </div>
-
-    <!-- 批量操作 -->
-    <div class="batch-actions" v-if="selectedQuestions.length > 0">
-      <el-alert
-        :title="`已选择 ${selectedQuestions.length} 项`"
-        type="info"
-        show-icon
-        :closable="false"
-      >
-        <template #default>
-          <el-button size="small" @click="batchActivate">批量激活</el-button>
-          <el-button size="small" @click="batchDeactivate">批量停用</el-button>
-          <el-button size="small" @click="batchUpdateDifficulty">批量设置难度</el-button>
-          <el-button size="small" type="danger" @click="batchDelete">批量删除</el-button>
-        </template>
-      </el-alert>
+          </template>
+        </el-input>
+      </div>
     </div>
 
     <!-- 数据表格 -->
@@ -111,10 +145,10 @@
         v-loading="loading"
         @selection-change="handleSelectionChange"
         @sort-change="handleSortChange"
+        stripe
+        border
       >
         <el-table-column type="selection" width="55" />
-        
-        <el-table-column prop="id" label="ID" width="80" sortable="custom" />
         
         <el-table-column label="问题内容" min-width="300" sortable="custom">
           <template #default="scope">
@@ -194,38 +228,30 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="220" align="center" fixed="right">
+        <el-table-column label="操作" width="180" align="center" fixed="right">
           <template #default="scope">
-            <el-button size="small" @click="viewQuestion(scope.row)">
-              <el-icon><View /></el-icon>
-              查看
-            </el-button>
-            <el-button 
-              size="small" 
-              type="primary" 
-              @click="editQuestion(scope.row)"
-              v-if="hasPermission('ADMIN')"
-            >
-              <el-icon><Edit /></el-icon>
-              编辑
-            </el-button>
-            <el-button
-              size="small"
-              @click="copyQuestion(scope.row)"
-              v-if="hasPermission('ADMIN')"
-            >
-              <el-icon><DocumentCopy /></el-icon>
-              复制
-            </el-button>
-            <el-button
-              size="small"
-              type="danger"
-              @click="deleteQuestionAction(scope.row)"
-              v-if="hasPermission('ADMIN')"
-            >
-              <el-icon><Delete /></el-icon>
-              删除
-            </el-button>
+            <div class="action-buttons">
+              <el-tooltip content="查看" placement="top">
+                <el-button size="small" circle @click="viewQuestion(scope.row)">
+                  <el-icon><View /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="编辑" placement="top">
+                <el-button size="small" circle type="primary" @click="editQuestion(scope.row)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="复制" placement="top">
+                <el-button size="small" circle type="success" @click="copyQuestion(scope.row)">
+                  <el-icon><DocumentCopy /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button size="small" circle type="danger" @click="deleteQuestionAction(scope.row)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -531,7 +557,10 @@ import {
   View,
   Edit,
   Delete,
-  DocumentCopy
+  DocumentCopy,
+  Select,
+  RemoveFilled,
+  Setting
 } from '@element-plus/icons-vue'
 
 // API导入
@@ -776,6 +805,19 @@ const resetFilters = () => {
   loadQuestions()
 }
 
+// 刷新列表
+const refreshList = () => {
+  searchKeyword.value = ''
+  Object.assign(filterParams, {
+    questionType: null,
+    difficultyLevel: null,
+    isActive: null
+  })
+  pagination.page = 1
+  loadQuestions()
+  ElMessage.success('列表已刷新')
+}
+
 // 分页处理
 const handleSizeChange = (size) => {
   pagination.size = size
@@ -861,30 +903,70 @@ const toggleQuestionStatus = async (question) => {
 }
 
 // 批量操作
-const batchActivate = async () => {
-  try {
-    const promises = selectedQuestions.value.map(q => 
-      updateQuestion(q.id, { ...q, isActive: true })
-    )
-    await Promise.all(promises)
-    ElMessage.success('批量激活成功')
-    loadQuestions()
-  } catch (error) {
-    ElMessage.error('批量激活失败：' + error.message)
+const batchActivate = () => {
+  if (selectedQuestions.value.length === 0) {
+    ElMessage.warning('请选择要激活的问题')
+    return
   }
+  
+  const count = selectedQuestions.value.length
+  ElMessageBox.confirm(
+    `确定要激活选中的 ${count} 个问题吗？`,
+    '确认批量激活',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'info'
+    }
+  ).then(async () => {
+    try {
+      const promises = selectedQuestions.value.map(q => 
+        updateQuestion(q.id, { ...q, isActive: true })
+      )
+      await Promise.all(promises)
+      ElMessage.success(`成功激活 ${count} 个问题`)
+      selectedQuestions.value = []
+      loadQuestions()
+    } catch (error) {
+      console.error('❌ 批量激活失败:', error)
+      ElMessage.error('批量激活失败：' + (error.message || '未知错误'))
+    }
+  }).catch(() => {
+    // 用户取消操作
+  })
 }
 
-const batchDeactivate = async () => {
-  try {
-    const promises = selectedQuestions.value.map(q => 
-      updateQuestion(q.id, { ...q, isActive: false })
-    )
-    await Promise.all(promises)
-    ElMessage.success('批量停用成功')
-    loadQuestions()
-  } catch (error) {
-    ElMessage.error('批量停用失败：' + error.message)
+const batchDeactivate = () => {
+  if (selectedQuestions.value.length === 0) {
+    ElMessage.warning('请选择要停用的问题')
+    return
   }
+  
+  const count = selectedQuestions.value.length
+  ElMessageBox.confirm(
+    `确定要停用选中的 ${count} 个问题吗？`,
+    '确认批量停用',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(async () => {
+    try {
+      const promises = selectedQuestions.value.map(q => 
+        updateQuestion(q.id, { ...q, isActive: false })
+      )
+      await Promise.all(promises)
+      ElMessage.success(`成功停用 ${count} 个问题`)
+      selectedQuestions.value = []
+      loadQuestions()
+    } catch (error) {
+      console.error('❌ 批量停用失败:', error)
+      ElMessage.error('批量停用失败：' + (error.message || '未知错误'))
+    }
+  }).catch(() => {
+    // 用户取消操作
+  })
 }
 
 const batchUpdateDifficulty = () => {
@@ -1005,54 +1087,80 @@ onMounted(() => {
 <style scoped>
 .question-management {
   padding: 20px;
+  background-color: #f5f5f5;
+  min-height: calc(100vh - 60px);
 }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.header-left h1 {
-  margin: 0;
-  color: #303133;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.search-section {
-  margin-bottom: 20px;
-  padding: 20px;
   background: white;
-  border-radius: 4px;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.batch-actions {
+.header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.back-button {
+  color: #409eff;
+  padding: 0;
+  font-size: 14px;
+}
+
+.title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-section h2 {
+  margin: 0;
+  color: #303133;
+  font-size: 20px;
+}
+
+.dialog-tag {
+  font-size: 14px;
+}
+
+.toolbar {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
   margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.toolbar-left {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0;
 }
 
 .table-section {
   background: white;
-  border-radius: 4px;
+  border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  padding: 20px;
+  overflow: hidden;
 }
 
 .pagination-section {
   display: flex;
   justify-content: center;
-  margin-top: 20px;
+  padding: 20px;
 }
 
 .question-content .question-text {
@@ -1139,5 +1247,18 @@ onMounted(() => {
 
 .mt-4 {
   margin-top: 16px;
+}
+
+/* 操作按钮样式 */
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-buttons .el-button.is-circle {
+  padding: 6px;
 }
 </style>
